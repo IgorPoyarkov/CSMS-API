@@ -1,0 +1,190 @@
+using Csms.Domain;
+
+namespace Csms.Application;
+
+/// <summary>
+/// Сценарии работы с пакетами ЕИС.
+///
+/// Слой ничего не знает про HTTP, базу и SOAP: только домен, хранилище и
+/// транспорт. Поэтому все правила можно проверить тестами без сети и без
+/// сертификатов.
+/// </summary>
+public sealed class EisPackageService(
+    IEisPackageRepository repository,
+    IEisTransport transport,
+    IEisDocumentXmlBuilder xmlBuilder,
+    TimeProvider clock)
+{
+    private DateTimeOffset Now => clock.GetUtcNow();
+
+    public Task<IReadOnlyList<EisPackage>> ListAsync(CancellationToken cancellationToken) =>
+        repository.ListAsync(cancellationToken);
+
+    public async Task<EisPackage> GetAsync(Guid id, CancellationToken cancellationToken) =>
+        await repository.FindAsync(id, cancellationToken)
+        ?? throw new DomainException($"Пакет {id} не найден.");
+
+    public async Task<EisPackage> CreateAsync(
+        CreatePackageCommand command,
+        CancellationToken cancellationToken)
+    {
+        // Номер проверяется дважды: здесь — чтобы не собирать XML зря,
+        // в домене — чтобы правило нельзя было обойти другим вызывающим кодом
+        var built = xmlBuilder.Build(
+            command.DocumentType,
+            EisRegistryNumber.Normalize(command.ContractEisNumber),
+            (command.Ikz ?? string.Empty).Trim());
+
+        var package = EisPackage.Create(
+            command.DocumentType,
+            command.ContractEisNumber,
+            command.Ikz,
+            built.Xml,
+            built.SchemaVersion,
+            Now);
+
+        await repository.AddAsync(package, cancellationToken);
+
+        return package;
+    }
+
+    /// <summary>Отдать фронту содержимое для подписания.</summary>
+    public async Task<SignatureTask> PrepareSignatureAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var package = await GetAsync(id, cancellationToken);
+
+        if (package.Status == EisPackageStatus.Draft)
+        {
+            package.BeginSigning(Now);
+            await repository.SaveAsync(package, cancellationToken);
+        }
+
+        if (package.Status != EisPackageStatus.Signing)
+        {
+            throw new DomainException(
+                $"Подписывать можно только черновик или пакет в подписании, сейчас статус «{package.Status.Ru()}».");
+        }
+
+        return new SignatureTask(
+            package.PayloadXml,
+            package.PayloadSha256,
+            package.PayloadSchemaVersion,
+            package.PayloadSchemaVersion.StartsWith("placeholder", StringComparison.OrdinalIgnoreCase));
+    }
+
+    public async Task<EisPackage> AttachSignatureAsync(
+        Guid id,
+        AttachSignatureCommand command,
+        CancellationToken cancellationToken)
+    {
+        var package = await GetAsync(id, cancellationToken);
+
+        package.AttachSignature(
+            command.SignatureBase64,
+            command.SignerThumbprint,
+            command.SignedContentSha256,
+            Now);
+
+        await repository.SaveAsync(package, cancellationToken);
+
+        return package;
+    }
+
+    /// <summary>
+    /// Отправить пакет в ЕИС.
+    ///
+    /// Транспортная ошибка не роняет запрос: она становится состоянием пакета
+    /// (<see cref="EisPackageStatus.SendFailed"/>), чтобы её было видно в
+    /// интерфейсе и можно было повторить отправку.
+    /// </summary>
+    public async Task<EisPackage> SendAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var package = await GetAsync(id, cancellationToken);
+
+        if (package.Status is not (EisPackageStatus.Signed or EisPackageStatus.SendFailed))
+        {
+            throw new DomainException(
+                $"Отправлять можно только подписанный пакет, сейчас статус «{package.Status.Ru()}».");
+        }
+
+        try
+        {
+            var result = await transport.SendAsync(package, cancellationToken);
+            package.MarkSent(result.EisGuid, Now);
+        }
+        catch (EisTransportException error)
+        {
+            package.MarkSendFailed(error.Message, Now);
+            await repository.SaveAsync(package, cancellationToken);
+
+            return package;
+        }
+
+        await repository.SaveAsync(package, cancellationToken);
+
+        return package;
+    }
+
+    /// <summary>Спросить у ЕИС, чем закончилась проверка ФЛК.</summary>
+    public async Task<EisPackage> RefreshStatusAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var package = await GetAsync(id, cancellationToken);
+
+        if (package.Status is not (EisPackageStatus.SentToEis or EisPackageStatus.FlkChecking))
+        {
+            throw new DomainException(
+                $"Запрашивать результат можно только после отправки, сейчас статус «{package.Status.Ru()}».");
+        }
+
+        if (string.IsNullOrWhiteSpace(package.EisGuid))
+        {
+            throw new DomainException(
+                "ЕИС не вернула идентификатор пакета (eisGuid): запрашивать результат не по чему.");
+        }
+
+        var status = await transport.GetStatusAsync(package, cancellationToken);
+
+        switch (status.Kind)
+        {
+            case EisStatusKind.InProgress:
+                package.MarkFlkChecking(Now);
+                break;
+
+            case EisStatusKind.Accepted:
+                package.MarkFlkChecking(Now);
+                package.MarkAccepted(Now);
+                break;
+
+            case EisStatusKind.Rejected:
+                package.MarkFlkChecking(Now);
+                package.MarkRejected(status.Errors, Now);
+                break;
+
+            default:
+                throw new DomainException($"ЕИС вернула неизвестное состояние пакета: {status.Kind}.");
+        }
+
+        await repository.SaveAsync(package, cancellationToken);
+
+        return package;
+    }
+
+    /// <summary>Вернуть отклоненный пакет в работу с пересборкой содержимого.</summary>
+    public async Task<EisPackage> ReviseAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var package = await GetAsync(id, cancellationToken);
+
+        package.Revise(Now);
+
+        var rebuilt = xmlBuilder.Build(
+            package.DocumentType,
+            package.ContractEisNumber,
+            package.Ikz);
+
+        package.UpdatePayload(rebuilt.Xml, rebuilt.SchemaVersion, Now);
+
+        await repository.SaveAsync(package, cancellationToken);
+
+        return package;
+    }
+}
