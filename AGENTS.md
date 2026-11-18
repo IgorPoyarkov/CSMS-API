@@ -31,6 +31,10 @@ dotnet test
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke.ps1   # нужен запущенный сервис
 ```
 
+Задачи для агентов лежат в `docs/tasks/*.md` — там границы, приёмка и то, чего
+делать не надо. Брифы писать туда же, а не в переписку: иначе следующий агент
+их не найдёт.
+
 ## Ловушки окружения
 
 - Windows PowerShell 5.1 читает `.ps1` без BOM как ANSI: русский текст в
