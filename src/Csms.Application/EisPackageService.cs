@@ -56,7 +56,7 @@ public sealed class EisPackageService(
         if (package.Status == EisPackageStatus.Draft)
         {
             package.BeginSigning(Now);
-            await repository.SaveAsync(package, cancellationToken);
+            await SaveAsync(package, cancellationToken);
         }
 
         if (package.Status != EisPackageStatus.Signing)
@@ -85,7 +85,7 @@ public sealed class EisPackageService(
             command.SignedContentSha256,
             Now);
 
-        await repository.SaveAsync(package, cancellationToken);
+        await SaveAsync(package, cancellationToken);
 
         return package;
     }
@@ -115,12 +115,12 @@ public sealed class EisPackageService(
         catch (EisTransportException error)
         {
             package.MarkSendFailed(error.Message, Now);
-            await repository.SaveAsync(package, cancellationToken);
+            await SaveAsync(package, cancellationToken);
 
             return package;
         }
 
-        await repository.SaveAsync(package, cancellationToken);
+        await SaveAsync(package, cancellationToken);
 
         return package;
     }
@@ -164,9 +164,28 @@ public sealed class EisPackageService(
                 throw new DomainException($"ЕИС вернула неизвестное состояние пакета: {status.Kind}.");
         }
 
-        await repository.SaveAsync(package, cancellationToken);
+        await SaveAsync(package, cancellationToken);
 
         return package;
+    }
+
+    /// <summary>
+    /// Сохранить пакет и перевести конфликт хранилища в слова для человека.
+    ///
+    /// Два окна или два нажатия «Отправить» не должны превращаться в ошибку
+    /// сервера: человек видит понятный текст и обновляет страницу.
+    /// </summary>
+    private async Task SaveAsync(EisPackage package, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await repository.SaveAsync(package, cancellationToken);
+        }
+        catch (EisPackageStoreConflictException)
+        {
+            throw new DomainException(
+                "Пакет уже изменён в другом окне или другим действием. Обновите страницу и повторите.");
+        }
     }
 
     /// <summary>Вернуть отклоненный пакет в работу с пересборкой содержимого.</summary>
@@ -183,7 +202,7 @@ public sealed class EisPackageService(
 
         package.UpdatePayload(rebuilt.Xml, rebuilt.SchemaVersion, Now);
 
-        await repository.SaveAsync(package, cancellationToken);
+        await SaveAsync(package, cancellationToken);
 
         return package;
     }

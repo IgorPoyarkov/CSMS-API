@@ -8,6 +8,10 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.0" />
+    <!-- Для dotnet-ef: миграции, создание которых происходит через дизайн-тайм контекст -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
+      <PrivateAssets>build</PrivateAssets>
+    </PackageReference>
   </ItemGroup>
 
   <PropertyGroup>

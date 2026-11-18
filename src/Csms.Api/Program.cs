@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Csms.Api;
 using Csms.Application;
 using Csms.Infrastructure;
+using Microsoft.EntityFrameworkCore;
 
 const string FrontendPolicy = "frontend";
 
@@ -25,7 +26,32 @@ builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 builder.Services.AddOpenApi();
 
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddSingleton<IEisPackageRepository, InMemoryEisPackageRepository>();
+
+// Хранилище выбирается переключателем: по умолчанию память, чтобы тесты и
+// локальный запуск работали без поднятой БД. С ЕИС_STORE=postgres сервис
+// честно падает, если строка подключения не задана, — молча уходить в память
+// нельзя: пакеты тогда терялись бы при каждом перезапуске незаметно для всех
+var store = (builder.Configuration["EIS_STORE"] ?? "memory").Trim().ToLowerInvariant();
+
+if (store == "postgres")
+{
+    var connectionString = builder.Configuration.GetConnectionString("EisDb");
+
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        throw new InvalidOperationException(
+            "EIS_STORE=postgres, но строка подключения ConnectionStrings:EisDb не задана. " +
+            "Задайте её: dotnet user-secrets set \"ConnectionStrings:EisDb\" \"Host=...;Database=...;Username=...\" --project src/Csms.Api");
+    }
+
+    builder.Services.AddDbContextFactory<EisDbContext>(options => options.UseNpgsql(connectionString));
+    builder.Services.AddSingleton<IEisPackageRepository, EfCoreEisPackageRepository>();
+}
+else
+{
+    builder.Services.AddSingleton<IEisPackageRepository, InMemoryEisPackageRepository>();
+}
+
 builder.Services.AddSingleton<IEisDocumentXmlBuilder, PlaceholderXmlBuilder>();
 builder.Services.AddSingleton<IEisTransport, MockEisTransport>();
 builder.Services.AddSingleton<EisPackageService>();

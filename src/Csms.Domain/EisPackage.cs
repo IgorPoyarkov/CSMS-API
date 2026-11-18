@@ -277,6 +277,58 @@ public sealed class EisPackage
         _history.Add(new EisPackageEvent(now, Status, Status, "Содержимое пакета обновлено"));
     }
 
+    /// <summary>
+    /// Восстановить пакет из хранилища.
+    ///
+    /// Нужен только репозиторию: публичный конструктор создаёт новый черновик,
+    /// а пакет с подписью и журналом из БД так не собрать. Переходы статуса
+    /// по-прежнему возможны только методами с проверками — этот путь лишь
+    /// возвращает уже случившееся состояние, а не «назначает» его.
+    /// </summary>
+    public static EisPackage Restore(
+        Guid id,
+        EisDocumentType documentType,
+        string contractEisNumber,
+        string ikz,
+        string payloadXml,
+        string payloadSchemaVersion,
+        string? signatureBase64,
+        string? signerThumbprint,
+        DateTimeOffset? signedAt,
+        string? eisGuid,
+        EisPackageStatus status,
+        string? lastError,
+        IReadOnlyList<FlkError> flkErrors,
+        IReadOnlyList<EisPackageEvent> history,
+        DateTimeOffset createdAt,
+        DateTimeOffset updatedAt)
+    {
+        var package = new EisPackage(
+            id,
+            documentType,
+            contractEisNumber,
+            ikz,
+            payloadXml,
+            payloadSchemaVersion,
+            createdAt);
+
+        package.PayloadSchemaVersion = payloadSchemaVersion;
+        package.PayloadSha256 = Sha256Hex(payloadXml);
+        package.SignatureBase64 = signatureBase64;
+        package.SignerThumbprint = signerThumbprint;
+        package.SignedAt = signedAt;
+        package.EisGuid = eisGuid;
+        package.Status = status;
+        package.LastError = lastError;
+        package.UpdatedAt = updatedAt;
+
+        package._flkErrors.AddRange(flkErrors);
+        package._history.Clear();
+        package._history.AddRange(history);
+
+        return package;
+    }
+
     private void EnsureStatus(string action, params EisPackageStatus[] allowed)
     {
         if (allowed.Contains(Status))
