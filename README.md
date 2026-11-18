@@ -30,8 +30,16 @@ HTTP, контракт — OpenAPI по адресу `/openapi/v1.json`.
 ## Запуск
 
 ```powershell
-dotnet run --project src/Csms.Api --urls http://localhost:5099
+dotnet run --project src/Csms.Api
 ```
+
+Сервис слушает `http://localhost:5099` (см. `Properties/launchSettings.json`).
+Для браузера разрешены origin-ы `http://localhost:5173` (Vite dev) и
+`http://localhost:4173` (preview) — точечно, а не «любой»: иначе первый же
+открытый чужой сайт смог бы дёргать API от имени заказчика.
+
+Фронтенд (`csms`) ходит сюда через `VITE_EIS_API_URL` (по умолчанию тот же
+`http://localhost:5099`). Экран — «Пакеты ЕИС» (`/eis/packages`).
 
 Сквозная проверка (сервис должен быть запущен):
 
