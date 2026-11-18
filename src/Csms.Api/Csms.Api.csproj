@@ -14,6 +14,9 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Локальные строки подключения и пароли живут в user-secrets,
+         а не в репозитории -->
+    <UserSecretsId>8f3b1d27-6c44-4e9a-9d51-2a7c0e5b61aa</UserSecretsId>
   </PropertyGroup>
 
 </Project>

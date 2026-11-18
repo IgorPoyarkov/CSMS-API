@@ -51,6 +51,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke.ps1
 отказы: отправку без подписи, подпись под другим содержимым, отказ ФЛК,
 недоступность шлюза. Все проверки должны завершиться строкой `OK`.
 
+### Локальная база (пока хранилище в памяти — не обязательна)
+
+Проектный кластер PostgreSQL 17 для шлюза: порт **5433**, база `csms_eis`,
+аутентификация `trust` на localhost. Системную установку на 5432 не трогаем —
+там чужой кластер с неизвестным паролем.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/pg-local.ps1
+```
+
+Строка подключения — в user-secrets проекта `Csms.Api`
+(`ConnectionStrings:EisDb`), в репозиторий не попадает.
+
 ## Проверки перед коммитом
 
 ```powershell
@@ -70,8 +83,10 @@ tests/
   Csms.Tests/           правила домена и сквозные сценарии
 scripts/
   smoke.ps1             проверка живого сервиса
+  pg-local.ps1          проектный кластер PostgreSQL (порт 5433)
 docs/
   eis-open-questions.md что нужно от ЕИС, чтобы выйти из заглушек
+  tasks/                брифы для агентов (Postgres-хранилище и др.)
 ```
 
 Зависимости направлены внутрь: `Api → Infrastructure → Application → Domain`.
