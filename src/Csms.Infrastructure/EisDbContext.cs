@@ -18,6 +18,11 @@ public sealed class EisDbContext(DbContextOptions<EisDbContext> options) : DbCon
 
     public DbSet<EisPackageEventRow> Events => Set<EisPackageEventRow>();
 
+    /// <summary>Версии справочников НСИ: своя схема, не смешиваем с пакетами.</summary>
+    public DbSet<ReferenceDatasetRow> ReferenceDatasets => Set<ReferenceDatasetRow>();
+
+    public DbSet<ReferenceItemRow> ReferenceItems => Set<ReferenceItemRow>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         builder.HasDefaultSchema("eis");
@@ -67,6 +72,45 @@ public sealed class EisDbContext(DbContextOptions<EisDbContext> options) : DbCon
             entity.Property(row => row.Comment).HasMaxLength(512).IsRequired();
 
             entity.HasIndex(row => new { row.PackageId, row.OrderIndex });
+        });
+
+        builder.Entity<ReferenceDatasetRow>(entity =>
+        {
+            entity.ToTable("datasets", "ref");
+            entity.HasKey(row => row.Id);
+
+            entity.Property(row => row.Code).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.Version).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.SourceDocument).HasMaxLength(256);
+            entity.Property(row => row.SourceUrl).HasMaxLength(2048);
+            entity.Property(row => row.SourceSha256).HasMaxLength(64);
+
+            entity.HasIndex(row => new { row.Code, row.Version }).IsUnique();
+
+            // Одна активная версия на справочник. Фильтр на уровне БД не даёт
+            // двум импортам одновременно пометить разные версии активными.
+            entity.HasIndex(row => row.Code)
+                .IsUnique()
+                .HasFilter("\"IsActive\" = TRUE");
+        });
+
+        builder.Entity<ReferenceItemRow>(entity =>
+        {
+            entity.ToTable("items", "ref");
+            entity.HasKey(row => row.Id);
+
+            entity.Property(row => row.Code).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.ParentCode).HasMaxLength(64);
+            entity.Property(row => row.Name).HasMaxLength(2000);
+            entity.Property(row => row.PayloadJson).HasColumnType("jsonb").IsRequired();
+
+            entity.HasIndex(row => new { row.DatasetId, row.Code }).IsUnique();
+            entity.HasIndex(row => new { row.DatasetId, row.ParentCode });
+
+            entity.HasOne(row => row.Dataset)
+                .WithMany(dataset => dataset.Items)
+                .HasForeignKey(row => row.DatasetId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

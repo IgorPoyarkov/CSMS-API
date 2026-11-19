@@ -46,11 +46,17 @@ if (store == "postgres")
 
     builder.Services.AddDbContextFactory<EisDbContext>(options => options.UseNpgsql(connectionString));
     builder.Services.AddSingleton<IEisPackageRepository, EfCoreEisPackageRepository>();
+    builder.Services.AddSingleton<IReferenceDataStore, EfCoreReferenceDataStore>();
 }
 else
 {
     builder.Services.AddSingleton<IEisPackageRepository, InMemoryEisPackageRepository>();
+    builder.Services.AddSingleton<IReferenceDataStore, InMemoryReferenceDataStore>();
 }
+
+// Импорт справочников рассылается фронту отдельным SSE-потоком
+var referenceEvents = new ReferenceDataEventBroker();
+builder.Services.AddSingleton(referenceEvents);
 
 builder.Services.AddSingleton<IEisDocumentXmlBuilder, PlaceholderXmlBuilder>();
 
@@ -119,5 +125,6 @@ app.MapOpenApi();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapEisPackageEndpoints();
 app.MapEisSchemaEndpoints();
+app.MapReferenceDataEndpoints();
 
 app.Run();

@@ -145,6 +145,44 @@ $failed = Post-Json "/api/eis/packages/$($down.id)/send" @{}
 Assert-Equal $failed.status "SendFailed" "статус при недоступном шлюзе"
 Write-Host "   $($failed.lastError)"
 
+# --- Справочники НСИ --------------------------------------------------------
+
+Step "Импорт версии справочника ОКПД2"
+# Версия уникальна: повторный прогон не должен упираться в 400 «уже импортировано».
+$refVersion = "smoke-$(Get-Date -Format 'yyyyMMddHHmmss')"
+$imported = Post-Json "/api/references/import" @{
+    dataset        = "nsiOKPD2"
+    version        = $refVersion
+    sourceDocument = "smoke"
+    sourceUrl      = $null
+    sourceSha256   = $null
+    publishedAt    = $null
+    items          = @(@{
+        code       = "32.50.13.190"
+        parentCode = "32.50.13"
+        name       = "Средства диагностики"
+        actual     = $true
+        payload    = @{
+            code       = "32.50.13.190"
+            parentCode = "32.50.13"
+            name       = "Средства диагностики"
+            actual     = $true
+        }
+    })
+}
+Assert-Equal $imported.dataset "nsiOKPD2" "набор импорта"
+Assert-Equal $imported.toVersion $refVersion "версия импорта"
+
+Step "Поиск по активной версии справочника"
+$refItems = Invoke-RestMethod -Uri "$BaseUrl/api/references/nsiOKPD2/items?search=диагностики"
+Assert-Equal $refItems.Count 1 "поиск в справочнике"
+Assert-Equal $refItems[0].code "32.50.13.190" "код из справочника"
+
+Step "Список версий справочника"
+$refSets = Invoke-RestMethod -Uri "$BaseUrl/api/references/datasets"
+$activeRef = $refSets | Where-Object { $_.isActive -and $_.code -eq "nsiOKPD2" } | Select-Object -First 1
+Assert-Equal $activeRef.version $refVersion "активная версия справочника"
+
 Step "Контракт для фронта"
 $openapi = Invoke-WebRequest -Uri "$BaseUrl/openapi/v1.json"
 Write-Host "   /openapi/v1.json — $($openapi.Content.Length) символов"
