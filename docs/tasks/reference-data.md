@@ -26,23 +26,34 @@
   `name`, `groupNumber`, `prohibition`, `restriction`, `industrial`,
   `lastUpdateDate` (это структура нацрежима ПП РФ № 1875 для `pp1875.ts`);
   `zfcs_nsiKTRUType` (52017) → `zfcs_KTRUPositionsType` → `data/code`,
-  `data/versionCode`, `data/version`, `data/inclusionDate`; упоминание FTP-каталога
-  `fcs_nsi/nsiKTRUNew` (52122); `zfcs_nsiKLADRType` (61758) — `code`,
+  `data/versionCode`, `data/version`, `data/inclusionDate`;
+`zfcs_nsiKLADRType` (61758) — `code`,
   `parentCode`, `objectType` (`R`, `D`, `A`, `C`, `S`, `L`), `fullName`,
   `shortName`, `OKATO`.
-- `schemas/17.0/GetDocsWS/GetDocsMIS/getDocsMIS-ws-api.xsd`, `getNsiRequest`
-  (line 733+): сначала `nsiAllList`, затем `nsiCode` из перечня; `nsiKind` =
-  `all` (полная выгрузка) или `inc` (инкремент); ответ `getNsiResponse` содержит
-  `nsiArchiveInfo/archiveUrl`. То есть значения приходят **архивами НСИ**, а не
-  внутри XSD.
+- `schemas/17.0/GetDocsWS/GetDocsIndividualPerson/getDocsIP-ws-api.xsd`,
+  `getNsiRequest` (line 687+): `index` (`id`, `createDateTime`, `mode` =
+  `PROD`/`TEST`) и `selectionParams` (`nsiCode44` из перечня `nsiAllList`,
+  `nsiKind` = `all` — полная выгрузка, `inc` — инкремент); ответ
+  `getNsiResponse` содержит `nsiArchiveInfo/archiveUrl` + `archiveName`.
+  Аналогичный метод есть в `getDocsMIS-ws-api.xsd` (line 733+) и
+  `getDocsLE-ws-api.xsd` (line 885). Значения приходят **архивами НСИ**, а не
+  внутри XSD. Подробный шаблон — `docs/eis-nsi-soap.md`.
 
 **Источники значений (в приоритете):** официальный сайт ЕИС через его
-публичные endpoint-ы дерева НСИ, SOAP `getNsiRequest` / FTP-каталоги ЕИС
-(`fcs_nsi/...`), затем официальные документы/таблицы (ОК 034-2014 ОКПД2,
-КТРУ, КЛАДР/ГАР/ФИАС, перечень ПП РФ № 1875). Придумывать коды и поля запрещено.
-Живой SOAP пока заблокирован TLS/IP-allowlist (см. `docs/eis-open-questions.md`),
-а `ftp.zakupki.gov.ru` больше не резолвится, поэтому рабочий путь — публичное
-дерево НСИ на `zakupki.gov.ru` и парсер официальных документов как fallback.
+публичные endpoint-ы дерева НСИ, SOAP `getNsiRequest` сервиса `getDocsIP`,
+затем официальные документы/таблицы (ОК 034-2014 ОКПД2, КТРУ, КЛАДР/ГАР/ФИАС,
+перечень ПП РФ № 1875). Придумывать коды и поля запрещено.
+
+Открытый FTP `ftp.zakupki.gov.ru` **закрыт с 1 января 2025 года**: Казначейство
+перевело отдачу открытых данных, включая КТРУ, на SOAP `getDocsIP`. Упоминания
+каталогов `fcs_nsi/...` в XSD — исторические, а не рабочий источник. Для
+`getNsiRequest` нужен персональный токен `individualPerson_token` из личного
+кабинета ЕИС (ЕСИА/Госуслуги): анонимный доступ под логином `free` больше не
+работает. Токен передаётся и в SOAP-запросе, и в заголовке при скачивании
+архива; на машине должны быть установлены корневые сертификаты Минцифры России.
+Полную выгрузку `all` запрашивают не чаще раза в сутки, для обновлений — `inc`.
+Пока токена нет, рабочий путь — публичное дерево НСИ на `zakupki.gov.ru`
+(реально загружен ОКПД2); КТРУ ждёт токена, демо-запись выгрузкой не является.
 
 ### Найденный рабочий источник ОКПД2
 
