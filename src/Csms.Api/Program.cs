@@ -111,6 +111,19 @@ builder.Services.AddSingleton<EisSchemaDownloader>(provider => new EisSchemaDown
     }));
 builder.Services.AddHostedService<EisSchemaUpdateWorker>();
 
+// Импорт справочников НСИ ходит на официальный сайт ЕИС только по запросу.
+// Таймаут увеличен: дерево ОКПД2 обходится сотнями мелких вызовов children.html.
+builder.Services.AddHttpClient("eis-nsi", client =>
+{
+    client.BaseAddress = new Uri("https://zakupki.gov.ru");
+    client.Timeout = TimeSpan.FromSeconds(180);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+    client.DefaultRequestHeaders.Add("User-Agent", "Csms.ReferenceDataImporter/1.0");
+});
+builder.Services.AddSingleton<EisNsiTreeImporter>(provider => new EisNsiTreeImporter(
+    provider.GetRequiredService<IHttpClientFactory>().CreateClient("eis-nsi"),
+    provider.GetRequiredService<ILogger<EisNsiTreeImporter>>()));
+
 builder.Services.AddSingleton<IEisTransport, MockEisTransport>();
 builder.Services.AddSingleton<EisPackageService>();
 

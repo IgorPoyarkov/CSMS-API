@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Csms.Application;
+using Csms.Infrastructure;
 
 namespace Csms.Api;
 
@@ -68,6 +69,51 @@ public static class ReferenceDataEndpoints
         .Produces<ReferenceDataUpdateEvent>()
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .WithSummary("Установить новую версию справочника из официальной выгрузки");
+
+        // Загрузка идёт на бэке: фронт не знает ни адресов ЕИС, ни формата
+        // дерева НСИ. dryRun позволяет посмотреть объём и версию до записи.
+        group.MapPost("/import/eis/{dataset}", async (
+            string dataset,
+            bool? dryRun,
+            EisNsiTreeImporter importer,
+            IReferenceDataStore store,
+            ReferenceDataEventBroker broker,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var snapshot = await importer.FetchAsync(dataset, cancellationToken);
+
+                if (dryRun is true)
+                {
+                    return Results.Ok(new
+                    {
+                        dataset,
+                        snapshot.Request.Version,
+                        snapshot.Request.SourceUrl,
+                        snapshot.Request.SourceSha256,
+                        itemCount = snapshot.ItemCount,
+                        sample = snapshot.Request.Items.Take(5).Select(item => new
+                        {
+                            item.Code,
+                            item.ParentCode,
+                            item.Name,
+                        }),
+                    });
+                }
+
+                var change = await store.PublishAsync(snapshot.Request, cancellationToken);
+                broker.Publish(change);
+                return Results.Ok(change);
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        })
+        .Produces<ReferenceDataUpdateEvent>()
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .WithSummary("Скачать справочник из ЕИС и установить его новой версией");
 
         group.MapGet("/events", async (
             HttpContext context,
