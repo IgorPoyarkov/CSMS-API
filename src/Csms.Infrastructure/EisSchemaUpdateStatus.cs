@@ -10,7 +10,10 @@ public sealed record EisSchemaStatusSnapshot(
     DateTimeOffset? LastCheckAt,
     DateTimeOffset? LastSuccessAt,
     string? LastError,
-    string Source);
+    string Source,
+    string? CatalogHash = null,
+    string? CatalogVersion = null,
+    DateTimeOffset? CatalogGeneratedAt = null);
 
 /// <summary>
 /// Хранилище последнего результата проверки. Обновляется фоновой службой,

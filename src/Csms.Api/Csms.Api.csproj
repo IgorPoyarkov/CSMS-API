@@ -4,6 +4,8 @@
     <ProjectReference Include="..\Csms.Domain\Csms.Domain.csproj" />
     <ProjectReference Include="..\Csms.Application\Csms.Application.csproj" />
     <ProjectReference Include="..\Csms.Infrastructure\Csms.Infrastructure.csproj" />
+    <!-- Ядро генератора документации: API строит каталог XSD при обновлении схем -->
+    <ProjectReference Include="..\..\tools\EisDocGenerator.Core\EisDocGenerator.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

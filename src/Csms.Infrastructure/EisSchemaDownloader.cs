@@ -24,7 +24,7 @@ public sealed class EisSchemaDownloader(
     EisSchemaUpdateStatus status,
     ILogger<EisSchemaDownloader> logger,
     string? rootDirectory = null,
-    Action<string>? onInstalled = null)
+    Func<string, CancellationToken, Task>? onInstalled = null)
 {
     private const string ManifestName = ".manifest.json";
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -111,8 +111,9 @@ public sealed class EisSchemaDownloader(
             var bytes = await DownloadAsync(downloadUrl, cancellationToken).ConfigureAwait(false);
             var sha256 = Convert.ToHexString(SHA256.HashData(bytes));
 
-            var fileCount = Install(
-                bytes, version, archive.Value.Id, downloadUrl, sha256, cancellationToken);
+            var fileCount = await Install(
+                bytes, version, archive.Value.Id, downloadUrl, sha256, cancellationToken)
+                .ConfigureAwait(false);
             var now = DateTimeOffset.UtcNow;
             var state = options.AutoPromote ? "Installed" : "Staged";
             var done = status.Snapshot() with
@@ -267,7 +268,7 @@ public sealed class EisSchemaDownloader(
     }
 
     /// <summary>Безопасная распаковка и атомарная подмена каталога версии.</summary>
-    private int Install(
+    private async Task<int> Install(
         byte[] archiveBytes,
         string version,
         long sourceId,
@@ -366,7 +367,24 @@ public sealed class EisSchemaDownloader(
             if (options.AutoPromote)
             {
                 Promote(staging, version);
-                onInstalled?.Invoke(version);
+
+                // Каталог документации и SSE — надстройка над XSD. Если она
+                // упала, схемы уже установлены и остаются активными: не надо
+                // превращать ошибку генератора в «обновление не удалось».
+                if (onInstalled is not null)
+                {
+                    try
+                    {
+                        await onInstalled(version, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception exception)
+                    {
+                        logger.LogWarning(
+                            exception,
+                            "XSD версии {Version} установлены, но каталог документации не обновлён",
+                            version);
+                    }
+                }
             }
             else
             {

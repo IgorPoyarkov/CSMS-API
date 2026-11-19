@@ -303,7 +303,7 @@ public sealed class SchemaReader
 
             case XmlSchemaSimpleTypeUnion union:
             {
-                var members = union.BaseMemberTypes
+                var members = (union.BaseMemberTypes ?? [])
                     .Select(member => TypeRef(member, tsName + "_member"))
                     .Distinct(StringComparer.Ordinal)
                     .ToList();
@@ -531,8 +531,8 @@ public sealed class SchemaReader
         var text = item?.Annotation?.Items
             ?.OfType<XmlSchemaDocumentation>()
             .SelectMany(documentation => documentation.Markup ?? [])
-            .Select(node => node.InnerText)
-            .FirstOrDefault();
+            .Select(node => node?.InnerText)
+            .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
 
         if (string.IsNullOrWhiteSpace(text))
         {

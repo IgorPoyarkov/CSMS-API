@@ -63,6 +63,14 @@ var schemaCatalog = new EisSchemaCatalog(schemaRoot);
 builder.Services.AddSingleton(schemaCatalog);
 builder.Services.AddSingleton<IEisSchemaCatalog>(schemaCatalog);
 
+// Каталог документации строится из тех же XSD и живёт в API-процессе:
+// фронт читает его через API и получает SSE при смене хеша.
+var docCatalog = new EisSchemaDocCatalog(schemaRoot);
+docCatalog.Initialize();
+var schemaEvents = new EisSchemaEventBroker();
+builder.Services.AddSingleton(docCatalog);
+builder.Services.AddSingleton(schemaEvents);
+
 // Автообновление Альбома форматов: страница документов → ZIP → проверка XSD →
 // атомарная подмена папки версии. Настройки читаются из EisSchemas:Update.
 var schemaOptions = new EisSchemaSourceOptions();
@@ -83,7 +91,18 @@ builder.Services.AddSingleton<EisSchemaDownloader>(provider => new EisSchemaDown
     provider.GetRequiredService<EisSchemaUpdateStatus>(),
     provider.GetRequiredService<ILogger<EisSchemaDownloader>>(),
     schemaRoot,
-    version => schemaCatalog.Invalidate(version)));
+    (version, _) =>
+    {
+        schemaCatalog.Invalidate(version);
+
+        var change = docCatalog.Regenerate(version);
+        if (change is not null)
+        {
+            schemaEvents.Publish(change);
+        }
+
+        return Task.CompletedTask;
+    }));
 builder.Services.AddHostedService<EisSchemaUpdateWorker>();
 
 builder.Services.AddSingleton<IEisTransport, MockEisTransport>();

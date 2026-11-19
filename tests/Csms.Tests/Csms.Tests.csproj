@@ -22,6 +22,7 @@
     <ProjectReference Include="..\..\src\Csms.Domain\Csms.Domain.csproj" />
     <ProjectReference Include="..\..\src\Csms.Application\Csms.Application.csproj" />
     <ProjectReference Include="..\..\src\Csms.Infrastructure\Csms.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Csms.Api\Csms.Api.csproj" />
   </ItemGroup>
 
 </Project>
