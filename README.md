@@ -51,6 +51,24 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke.ps1
 отказы: отправку без подписи, подпись под другим содержимым, отказ ФЛК,
 недоступность шлюза. Все проверки должны завершиться строкой `OK`.
 
+### XSD Альбома ЕИС и документация по типам
+
+Установленные XSD версии 17.0 лежат в `schemas/17.0/` и закоммичены: это снимок,
+который скачивает и проверяет `EisSchemaDownloader`. Сервис обновляет его сам
+(статус — `GET /api/eis/schemas/status`, ручная проверка — `POST /update`).
+
+Генератор документации пересобирает из XSD каталог и TypeScript-типы для
+фронтенда:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-schema-docs.ps1
+```
+
+Результат — `csms/public/eis-schemas/catalog.json` и
+`csms/src/services/Eis/generated/eisSchemas.generated.d.ts`. Во фронте по ним
+работает обозреватель `/eis/schemas` («Swagger для XSD»): версии, пространства
+имён, типы, поля и описания. Подробнее — `schemas/README.md`.
+
 ### Локальная база (пока хранилище в памяти — не обязательна)
 
 Проектный кластер PostgreSQL 17 для шлюза: порт **5433**, база `csms_eis`,
@@ -84,6 +102,11 @@ tests/
 scripts/
   smoke.ps1             проверка живого сервиса
   pg-local.ps1          проектный кластер PostgreSQL (порт 5433)
+  generate-schema-docs.ps1 каталог XSD и TS-типы для фронтенда
+tools/
+  EisDocGenerator/      чтение XSD через XmlSchemaSet, вывод JSON и .d.ts
+schemas/
+  17.0/                 снимок официальных XSD Альбома ЕИС
 docs/
   eis-open-questions.md что нужно от ЕИС, чтобы выйти из заглушек
   tasks/                брифы для агентов (Postgres-хранилище и др.)
@@ -95,5 +118,8 @@ docs/
 
 ## Чего не хватает для настоящего обмена
 
-Кратко: **XSD из Альбома форматов ЕИС** и **регистрация внешней системы (ВС)** в
-личном кабинете ЕИС. Подробно — [docs/eis-open-questions.md](docs/eis-open-questions.md).
+Кратко: **XSD именно для наших документов** (исполнение контракта, привлечение
+СМП — альбом ТФФ по 658/215н и 918; общие интеграционные схемы ЕИС уже
+скачиваются автоматически) и **регистрация внешней системы (ВС)** с доступом по
+IP в личном кабинете ЕИС. Подробно —
+[docs/eis-open-questions.md](docs/eis-open-questions.md).
