@@ -111,10 +111,19 @@ individualPerson_token: <TOKEN>
 
 ## Что блокирует реальный импорт КТРУ
 
-1. Нет токена `individualPerson_token` — без него сервис не вернёт архивы.
+1. Токен `individualPerson_token` **есть** — он лежит в User Secrets проекта
+   `csms/eis-parser` (ключ `Eis44:IndividualPersonToken`). Но соединение до
+   `int44.zakupki.gov.ru:443` сбрасывается на `SSL_connect` ещё до TLS-handshake:
+   нужны доступ/белый список или другой контур, а не токен.
 2. Не подтверждён точный `nsiCode` из `nsiAllList` и продуктивный адрес шлюза.
 3. Не проверен обмен на тестовом контуре с установленными корневыми
    сертификатами Минцифры.
 
-Пока это не закрыто, Records `nsiKTRU / sse-073720` в postgres — демо, а не
+Код импорта готов в `csms/eis-parser`: `BuildNsiRequest`, `NsiXmlParser`,
+`NsiSnapshotBuilder`, `NsiImportService` и CLI `--import-nsi` (`--dry-run` — без
+записи). Снимок публикуется в `POST /api/references/import`, токен в `csms-api`
+не дублируется. Живой прогон не выполнялся: код покрыт юнит-тестами по XSD,
+но сетевой путь остаётся непроверенным.
+
+Пока это не закрыто, запись `nsiKTRU / sse-073720` в postgres — демо, а не
 выгрузка; шапка фронта его не показывает.
