@@ -156,6 +156,8 @@ public sealed class EisDbContext(DbContextOptions<EisDbContext> options) : DbCon
             entity.Property(row => row.SourceUrl).HasMaxLength(2048);
             entity.Property(row => row.PdfSha256).HasMaxLength(64);
             entity.Property(row => row.OcrEngine).HasMaxLength(128);
+            entity.Property(row => row.LastCheckStatus).HasMaxLength(24);
+            entity.Property(row => row.LastCheckMessage).HasMaxLength(1024);
             entity.Property(row => row.UnresolvedJson).HasColumnType("jsonb");
 
             entity.HasIndex(row => new { row.Code, row.Version }).IsUnique();

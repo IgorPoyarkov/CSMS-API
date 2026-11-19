@@ -171,6 +171,9 @@ public sealed class InMemoryNpaRuleStore : INpaRuleStore
                 import.PdfSha256,
                 import.OcrEngine,
                 fetchedAt,
+                fetchedAt,
+                import.Promote ? NpaCheckStatuses.Published : NpaCheckStatuses.Prepared,
+                "Проверка официального текста и публикация версии правил.",
                 import.Rules.Count,
                 CountUnresolved(import.UnresolvedJson),
                 import.UnresolvedJson,
@@ -201,6 +204,39 @@ public sealed class InMemoryNpaRuleStore : INpaRuleStore
                 import.Rules.Count,
                 hash,
                 fetchedAt));
+        }
+    }
+
+    public Task<NpaDocumentInfo?> MarkCheckedAsync(
+        string code,
+        string status,
+        string? message,
+        DateTimeOffset? checkedAt = null,
+        CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+        {
+            if (!_documents.TryGetValue(code, out var versions) || versions.Count == 0)
+            {
+                return Task.FromResult<NpaDocumentInfo?>(null);
+            }
+
+            var target = versions
+                .OrderByDescending(info => info.IsActive)
+                .ThenByDescending(info => info.FetchedAt)
+                .First();
+
+            var updated = target with
+            {
+                LastCheckedAt = checkedAt ?? DateTimeOffset.UtcNow,
+                LastCheckStatus = status,
+                LastCheckMessage = message is null
+                    ? null
+                    : message.Length > 1024 ? message[..1024] : message,
+            };
+
+            versions[versions.IndexOf(target)] = updated;
+            return Task.FromResult<NpaDocumentInfo?>(updated);
         }
     }
 

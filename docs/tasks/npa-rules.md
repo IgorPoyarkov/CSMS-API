@@ -47,16 +47,34 @@
     правил, атомарная публикация и история версий. `force=true` создаёт новую
     версию с суффиксом `-r2`, `-r3` … через `INpaRuleStore.VersionExistsAsync`.
   - `NpaSyncWorker` — фоновая проверка новых публикаций (`Npa:Enabled`).
-- `ref.npa_documents` / `ref.npa_rules` — миграция `20261119203230_AddNpaRules`,
-  индекс `("Okpd2Code" text_pattern_ops)` для префиксного поиска.
+- `ref.npa_documents` / `ref.npa_rules` — миграции `20261119203230_AddNpaRules`
+  и `20261119225748_AddNpaCheckTimestamps`, индекс
+  `("Okpd2Code" text_pattern_ops)` для префиксного поиска.
+- У документа разделены `FetchedAt` (когда опубликована эта версия правил) и
+  `LastCheckedAt`/`LastCheckStatus`/`LastCheckMessage` (когда официальный текст
+  последний раз проверялся, даже если версия не изменилась).
 - Хранилища: `EfCoreNpaRuleStore` (PostgreSQL) и `InMemoryNpaRuleStore`
   (`EIS_STORE=memory`). Публикация версии — в транзакции, активная ровно одна.
 
+## Расписание проверки
+
+- `Npa:CheckTime = "03:00"` — ежедневный старт по московскому времени (UTC+3,
+  сезонного сдвига нет). Задержка считается от текущего времени сервера, а не от
+  момента запуска процесса.
+- `Npa:CheckDelayMinutes = 30` — пауза после завершения каждого акта перед
+  следующим. Акты обрабатываются строго последовательно (`NpaSyncWorker`), чтобы
+  OCR и запросы к порталу публикования не конкурировали.
+- Проверка фиксируется в БД даже при `up_to_date` и при ошибке: в реестре видно
+  и время последней проверки, и время публикации активной версии.
+
 ## API
 
-- `GET /api/npa/config` — список ведомых актов и режимов.
+- `GET /api/npa/config` — список ведомых актов и режимов (`checkTime`,
+  `checkDelayMinutes`, `timeZone`).
 - `GET /api/npa/documents`, `GET /api/npa/documents/{code}` — версии и активная
-  версия (включая `unresolvedJson` — строки для ручной разметки).
+  версия. Поля `fetchedAt` (обновление версии), `lastCheckedAt`,
+  `lastCheckStatus`, `lastCheckMessage` (последняя проверка) и `unresolvedJson`
+  (строки для ручной разметки).
 - `GET /api/npa/documents/{code}/rules?search=&status=&skip=&take=&directOnly=true`
   — правила активной версии (постранично; `skip` обязателен для выгрузки всех
   17 тыс.). `directOnly=true` отдаёт только прямые правила (107/973/58) — этого
@@ -95,7 +113,7 @@ dotnet run --project src/Csms.Api --no-build --no-launch-profile
 
 - Сборка: `dotnet build src/Csms.Api -v q --nologo` — 0 ошибок, 0 предупреждений.
 - Тесты: `$env:EIS_TEST_DB = 'Host=localhost;Port=5433;Database=csms_eis;Username=postgres'; dotnet test tests/Csms.Tests -v q --nologo`
-  — 64 пройдено (последний прогон).
+  — 66 пройдено (последний прогон).
 - Tesseract: `C:\Program Files\Tesseract-OCR\tesseract.exe`; tessdata —
   `ocr/tessdata` (`configs/tsv` лежит в git с `tessedit_create_tsv 1`, а
   `rus.traineddata` скачивается скриптом `scripts/fetch-tessdata.ps1` и в git

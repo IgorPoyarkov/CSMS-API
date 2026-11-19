@@ -52,8 +52,30 @@ public sealed class NpaSyncService(
         var document = options.Find(code)
             ?? throw new ArgumentException($"Акт {code} не описан в Npa:Documents.");
 
-        var source = await LoadAsync(document, cancellationToken);
-        return await ProcessAsync(document, source, force, dryRun, cancellationToken);
+        try
+        {
+            var source = await LoadAsync(document, cancellationToken);
+            var result = await ProcessAsync(document, source, force, dryRun, cancellationToken);
+
+            if (!dryRun)
+            {
+                await store.MarkCheckedAsync(
+                    code, result.Status, result.Message, cancellationToken: cancellationToken);
+            }
+
+            return result;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException && !dryRun)
+        {
+            // Ошибка тоже является проверкой: в реестре должно быть видно,
+            // что акт проверялся, даже если скачивание или разбор не удались.
+            await store.MarkCheckedAsync(
+                code,
+                NpaCheckStatuses.Error,
+                exception.Message,
+                cancellationToken: CancellationToken.None);
+            throw;
+        }
     }
 
     /// <summary>Разбор загруженного файла: когда у заказчика есть своя редакция в Word.</summary>
@@ -84,7 +106,27 @@ public sealed class NpaSyncService(
             null,
             document.File);
 
-        return await ProcessAsync(document, source, force, dryRun, cancellationToken);
+        try
+        {
+            var result = await ProcessAsync(document, source, force, dryRun, cancellationToken);
+
+            if (!dryRun)
+            {
+                await store.MarkCheckedAsync(
+                    code, result.Status, result.Message, cancellationToken: cancellationToken);
+            }
+
+            return result;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException && !dryRun)
+        {
+            await store.MarkCheckedAsync(
+                code,
+                NpaCheckStatuses.Error,
+                exception.Message,
+                cancellationToken: CancellationToken.None);
+            throw;
+        }
     }
 
     private async Task<NpaSyncResult> ProcessAsync(
@@ -106,7 +148,7 @@ public sealed class NpaSyncService(
         {
             return new NpaSyncResult(
                 document.Code,
-                "up_to_date",
+                NpaCheckStatuses.UpToDate,
                 active.Version,
                 active.ItemCount,
                 active.PagesCount,
@@ -189,7 +231,7 @@ public sealed class NpaSyncService(
 
         return new NpaSyncResult(
             document.Code,
-            options.AutoPromote ? "published" : "prepared",
+            options.AutoPromote ? NpaCheckStatuses.Published : NpaCheckStatuses.Prepared,
             change.ToVersion,
             change.RuleCount,
             parsed.PageCount,

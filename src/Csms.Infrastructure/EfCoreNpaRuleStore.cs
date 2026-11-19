@@ -214,6 +214,11 @@ public sealed class EfCoreNpaRuleStore(
             PdfSha256 = import.PdfSha256,
             OcrEngine = import.OcrEngine,
             FetchedAt = fetchedAt,
+            LastCheckedAt = fetchedAt,
+            LastCheckStatus = import.Promote
+                ? NpaCheckStatuses.Published
+                : NpaCheckStatuses.Prepared,
+            LastCheckMessage = "Проверка официального текста и публикация версии правил.",
             ItemCount = import.Rules.Count,
             UnresolvedJson = import.UnresolvedJson,
             IsActive = import.Promote,
@@ -251,6 +256,38 @@ public sealed class EfCoreNpaRuleStore(
             import.Rules.Count,
             info.Hash,
             fetchedAt);
+    }
+
+    public async Task<NpaDocumentInfo?> MarkCheckedAsync(
+        string code,
+        string status,
+        string? message,
+        DateTimeOffset? checkedAt = null,
+        CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+
+        // При AutoPromote=false новая версия может быть не активной: отметка
+        // всё равно относится к документу, который показывается как актуальный.
+        var row = await db.NpaDocuments
+            .Where(document => document.Code == code)
+            .OrderByDescending(document => document.IsActive)
+            .ThenByDescending(document => document.FetchedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (row is null)
+        {
+            return null;
+        }
+
+        row.LastCheckedAt = checkedAt ?? DateTimeOffset.UtcNow;
+        row.LastCheckStatus = status;
+        row.LastCheckMessage = message is null
+            ? null
+            : message.Length > 1024 ? message[..1024] : message;
+
+        await db.SaveChangesAsync(cancellationToken);
+        return ToInfo(row);
     }
 
     public async Task<NpaRuleInfo?> VerifyAsync(
@@ -317,6 +354,9 @@ public sealed class EfCoreNpaRuleStore(
         row.PdfSha256,
         row.OcrEngine,
         row.FetchedAt,
+        row.LastCheckedAt,
+        row.LastCheckStatus,
+        row.LastCheckMessage,
         row.ItemCount,
         CountUnresolved(row.UnresolvedJson),
         row.UnresolvedJson,

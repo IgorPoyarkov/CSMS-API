@@ -19,7 +19,9 @@ public static class NpaEndpoints
         group.MapGet("/config", (NpaOptions options) => Results.Ok(new
         {
             enabled = options.Enabled,
-            syncIntervalHours = options.SyncIntervalHours,
+            checkTime = options.CheckTime,
+            checkDelayMinutes = options.CheckDelayMinutes,
+            timeZone = "UTC+3 (Москва)",
             autoPromote = options.AutoPromote,
             minAutoConfidence = options.MinAutoConfidence,
             documents = options.Documents.Select(document => new

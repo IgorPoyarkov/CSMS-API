@@ -280,6 +280,43 @@ public sealed class NpaTests
     }
 
     [Fact]
+    public void Расписание_проверки_задаётся_в_московском_времени()
+    {
+        var options = new NpaOptions();
+        Assert.Equal("03:00", options.CheckTime);
+        Assert.Equal(30, options.CheckDelayMinutes);
+        Assert.True(options.TryGetCheckTime(out var time));
+        Assert.Equal(new TimeOnly(3, 0), time);
+
+        options.CheckTime = "25:00";
+        Assert.Throws<InvalidOperationException>(() => options.Validate());
+    }
+
+    [Fact]
+    public async Task Хранилище_отделяет_время_проверки_от_времени_публикации_версии()
+    {
+        var store = new InMemoryNpaRuleStore();
+        await store.PublishAsync(Import("v1", Rule("26.20", NpaRuleTypes.Include)));
+
+        var checkedAt = new DateTimeOffset(2026, 11, 20, 3, 15, 0, TimeSpan.FromHours(3));
+        var marked = await store.MarkCheckedAsync(
+            "rp-471",
+            NpaCheckStatuses.UpToDate,
+            "Официальный текст не изменился.",
+            checkedAt);
+
+        Assert.NotNull(marked);
+        Assert.Equal(checkedAt, marked!.LastCheckedAt);
+        Assert.Equal(NpaCheckStatuses.UpToDate, marked.LastCheckStatus);
+
+        var active = await store.GetActiveAsync("rp-471");
+        Assert.Equal(checkedAt, active!.LastCheckedAt);
+        Assert.NotEqual(checkedAt, active.FetchedAt);
+        Assert.Equal(NpaCheckStatuses.UpToDate, active.LastCheckStatus);
+        Assert.Equal("Официальный текст не изменился.", active.LastCheckMessage);
+    }
+
+    [Fact]
     public void Парсер_разложки_отделяет_код_строки_от_оговорки_кроме()
     {
         var catalog = Catalog(("26.20", "Компьютеры"), ("26.60", "Радиоаппаратура"));

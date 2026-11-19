@@ -480,6 +480,17 @@ namespace Csms.Infrastructure.Migrations
                     b.Property<int>("ItemCount")
                         .HasColumnType("integer");
 
+                    b.Property<string>("LastCheckMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("LastCheckStatus")
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<DateTimeOffset?>("LastCheckedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Number")
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");

@@ -35,6 +35,18 @@ public static class NpaRuleStatuses
     public const string Rejected = "rejected";
 }
 
+/// <summary>Итог последней проверки официальной публикации акта.</summary>
+public static class NpaCheckStatuses
+{
+    public const string UpToDate = "up_to_date";
+
+    public const string Published = "published";
+
+    public const string Prepared = "prepared";
+
+    public const string Error = "error";
+}
+
 /// <summary>Версия правил по одному акту (одна выгрузка официального текста).</summary>
 public sealed record NpaDocumentInfo(
     string Code,
@@ -49,6 +61,9 @@ public sealed record NpaDocumentInfo(
     string? PdfSha256,
     string? OcrEngine,
     DateTimeOffset FetchedAt,
+    DateTimeOffset? LastCheckedAt,
+    string? LastCheckStatus,
+    string? LastCheckMessage,
     int ItemCount,
     int UnresolvedCount,
     string? UnresolvedJson,
@@ -163,6 +178,17 @@ public interface INpaRuleStore
 
     Task<NpaDocumentUpdateEvent> PublishAsync(
         NpaDocumentImport import,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Отметить проверку официального текста, даже если версия правил не
+    /// изменилась. Это отдельное время от FetchedAt (момента публикации версии).
+    /// </summary>
+    Task<NpaDocumentInfo?> MarkCheckedAsync(
+        string code,
+        string status,
+        string? message,
+        DateTimeOffset? checkedAt = null,
         CancellationToken cancellationToken = default);
 
     Task<NpaRuleInfo?> VerifyAsync(

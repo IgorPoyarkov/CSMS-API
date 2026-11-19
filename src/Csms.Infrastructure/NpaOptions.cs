@@ -16,8 +16,15 @@ public sealed class NpaOptions
     /// <summary>Фоновая проверка новых публикаций.</summary>
     public bool Enabled { get; set; } = true;
 
-    /// <summary>Как часто проверять, не изменился ли официальный текст.</summary>
-    public int SyncIntervalHours { get; set; } = 24;
+    /// <summary>
+    /// Ежедневное время проверки по московскому времени (UTC+3), HH:mm.
+    /// Акты обрабатываются последовательно, чтобы не грузить портал и OCR
+    /// тремя тяжёлыми выгрузками одновременно.
+    /// </summary>
+    public string CheckTime { get; set; } = "03:00";
+
+    /// <summary>Пауза после завершения одного акта перед следующим.</summary>
+    public int CheckDelayMinutes { get; set; } = 30;
 
     /// <summary>
     /// Публиковать новую версию правил сразу. Если false — версия готовится,
@@ -43,9 +50,16 @@ public sealed class NpaOptions
 
     public void Validate()
     {
-        if (SyncIntervalHours < 1)
+        if (!TryGetCheckTime(out _))
         {
-            throw new InvalidOperationException("Npa:SyncIntervalHours должен быть не меньше 1.");
+            throw new InvalidOperationException(
+                "Npa:CheckTime должен быть временем суток в формате HH:mm (московское время UTC+3).");
+        }
+
+        if (CheckDelayMinutes is < 0 or > 1440)
+        {
+            throw new InvalidOperationException(
+                "Npa:CheckDelayMinutes должен быть в диапазоне 0..1440.");
         }
 
         if (MinAutoConfidence is < 0 or > 1)
@@ -83,6 +97,15 @@ public sealed class NpaOptions
     public NpaDocumentOptions? Find(string code) =>
         Documents.FirstOrDefault(document =>
             document.Code.Equals(code, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Время проверки в формате HH:mm; Validate гарантирует успех.</summary>
+    public bool TryGetCheckTime(out TimeOnly time) =>
+        TimeOnly.TryParseExact(
+            CheckTime,
+            "HH:mm",
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None,
+            out time);
 }
 
 /// <summary>Параметры распознавания сканов.</summary>

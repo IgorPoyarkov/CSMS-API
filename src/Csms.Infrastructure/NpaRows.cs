@@ -37,7 +37,20 @@ public sealed class NpaDocumentRow
     /// <summary>Чем распознан текст: tesseract 5.4 (rus) и т.п. Нужно для аудита.</summary>
     public string? OcrEngine { get; set; }
 
+    /// <summary>Когда эта версия правил была опубликована («обновлено»).</summary>
     public DateTimeOffset FetchedAt { get; set; }
+
+    /// <summary>
+    /// Когда официальный текст последний раз проверялся («проверено»).
+    /// Отличается от FetchedAt: при неизменном тексте новая версия не создаётся.
+    /// </summary>
+    public DateTimeOffset? LastCheckedAt { get; set; }
+
+    /// <summary>up_to_date / published / prepared / error.</summary>
+    public string? LastCheckStatus { get; set; }
+
+    /// <summary>Короткий итог последней проверки для реестра актов.</summary>
+    public string? LastCheckMessage { get; set; }
 
     public int ItemCount { get; set; }
 
