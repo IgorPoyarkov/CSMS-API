@@ -3,6 +3,7 @@ using Csms.Api;
 using Microsoft.AspNetCore.Authentication;
 using Csms.Application;
 using Csms.Infrastructure;
+using Csms.Infrastructure.Npa;
 using Microsoft.EntityFrameworkCore;
 
 const string FrontendPolicy = "frontend";
@@ -57,12 +58,14 @@ if (store == "postgres")
     builder.Services.AddSingleton<IEisPackageRepository, EfCoreEisPackageRepository>();
     builder.Services.AddSingleton<IReferenceDataStore, EfCoreReferenceDataStore>();
     builder.Services.AddSingleton<IAccessStore, EfCoreAccessStore>();
+    builder.Services.AddSingleton<INpaRuleStore, EfCoreNpaRuleStore>();
 }
 else
 {
     builder.Services.AddSingleton<IEisPackageRepository, InMemoryEisPackageRepository>();
     builder.Services.AddSingleton<IReferenceDataStore, InMemoryReferenceDataStore>();
     builder.Services.AddSingleton<IAccessStore, InMemoryAccessStore>();
+    builder.Services.AddSingleton<INpaRuleStore, InMemoryNpaRuleStore>();
 }
 
 // Импорт справочников рассылается фронту отдельным SSE-потоком
@@ -139,6 +142,30 @@ builder.Services.AddSingleton<IEisTransport, MockEisTransport>();
 builder.Services.AddSingleton<EisPackageService>();
 builder.Services.AddSingleton<AccessService>();
 
+// Агент разметки НПА: официальный текст акта → правила по кодам ОКПД2.
+// Настройки в разделе Npa; Tesseract ищется при первом запуске, чтобы сервис
+// поднимался и без него.
+var npaOptions = new NpaOptions();
+builder.Configuration.GetSection(NpaOptions.SectionName).Bind(npaOptions);
+npaOptions.Validate();
+builder.Services.AddSingleton(npaOptions);
+builder.Services.AddSingleton(npaOptions.Ocr);
+
+builder.Services.AddHttpClient("pravo-api", client =>
+{
+    client.BaseAddress = new Uri("http://publication.pravo.gov.ru");
+    client.Timeout = TimeSpan.FromSeconds(180);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Csms.NpaAgent/1.0");
+});
+
+builder.Services.AddSingleton(provider => new PravoDocumentClient(
+    provider.GetRequiredService<IHttpClientFactory>().CreateClient("pravo-api")));
+builder.Services.AddSingleton<INpaOcrEngine, TesseractOcrEngine>();
+builder.Services.AddSingleton<NpaLayoutParser>();
+builder.Services.AddSingleton<NpaPdfParser>();
+builder.Services.AddSingleton<NpaSyncService>();
+builder.Services.AddHostedService<NpaSyncWorker>();
+
 var app = builder.Build();
 
 app.UseExceptionHandler();
@@ -153,6 +180,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapEisPackageEndpoints();
 app.MapEisSchemaEndpoints();
 app.MapReferenceDataEndpoints();
+app.MapNpaEndpoints();
 app.MapAccessEndpoints();
 
 app.Run();

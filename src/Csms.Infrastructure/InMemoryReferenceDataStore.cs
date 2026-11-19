@@ -76,12 +76,22 @@ public sealed class InMemoryReferenceDataStore : IReferenceDataStore
         }
     }
 
+    public Task<IReadOnlyList<ReferenceItemInfo>> GetAllAsync(
+        string dataset,
+        CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+        {
+            var source = _items.TryGetValue(dataset, out var items) ? items : [];
+            return Task.FromResult<IReadOnlyList<ReferenceItemInfo>>([.. source]);
+        }
+    }
+
     public Task<ReferenceDataUpdateEvent> PublishAsync(
         ReferenceImportRequest request,
         CancellationToken cancellationToken = default)
     {
-        var clean = ReferenceImportNormalizer.Normalize(request);
-        var importedAt = DateTimeOffset.UtcNow;
+        var clean = ReferenceImportNormalizer.Normalize(request);        var importedAt = DateTimeOffset.UtcNow;
 
         lock (_gate)
         {

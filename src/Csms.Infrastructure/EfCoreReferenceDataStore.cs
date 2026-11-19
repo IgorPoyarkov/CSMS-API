@@ -87,6 +87,39 @@ public sealed class EfCoreReferenceDataStore(
             row.PayloadJson)).ToArray();
     }
 
+    public async Task<IReadOnlyList<ReferenceItemInfo>> GetAllAsync(
+        string dataset,
+        CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+
+        var active = await db.ReferenceDatasets
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                row => row.Code == dataset && row.IsActive,
+                cancellationToken);
+
+        if (active is null)
+        {
+            return [];
+        }
+
+        // payload не нужен: у ОКПД2 это десятки мегабайт jsonb, а агенту
+        // разметки требуются только код, родитель и наименование.
+        var rows = await db.ReferenceItems
+            .AsNoTracking()
+            .Where(row => row.DatasetId == active.Id)
+            .Select(row => new { row.Code, row.ParentCode, row.Name, row.Actual })
+            .ToListAsync(cancellationToken);
+
+        return rows.Select(row => new ReferenceItemInfo(
+            row.Code,
+            row.ParentCode,
+            row.Name,
+            row.Actual,
+            "{}")).ToArray();
+    }
+
     public async Task<ReferenceDataUpdateEvent> PublishAsync(
         ReferenceImportRequest request,
         CancellationToken cancellationToken = default)

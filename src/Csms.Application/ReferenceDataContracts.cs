@@ -71,6 +71,14 @@ public interface IReferenceDataStore
         int take,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Все строки активной версии справочника. Нужно агенту разметки НПА:
+    /// коды из акта сверяются с реальным справочником ОКПД2, а не с догадкой.
+    /// </summary>
+    Task<IReadOnlyList<ReferenceItemInfo>> GetAllAsync(
+        string dataset,
+        CancellationToken cancellationToken = default);
+
     Task<ReferenceDataUpdateEvent> PublishAsync(
         ReferenceImportRequest request,
         CancellationToken cancellationToken = default);

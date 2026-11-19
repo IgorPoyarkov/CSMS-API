@@ -12,3 +12,6 @@ TestResults/
 
 # Локальные логи
 *.log
+
+# Языковые файлы Tesseract скачиваются скриптом scripts/fetch-tessdata.ps1
+ocr/tessdata/*.traineddata

@@ -453,6 +453,143 @@ namespace Csms.Infrastructure.Migrations
                     b.ToTable("packages", "eis");
                 });
 
+            modelBuilder.Entity("Csms.Infrastructure.NpaDocumentRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateOnly?>("DocumentDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("EoNumber")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("FetchedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("ItemCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Number")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("OcrEngine")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("PagesCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PdfSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateOnly?>("PublishDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("SourceUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("UnresolvedJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasFilter("\"IsActive\" = TRUE");
+
+                    b.HasIndex("Code", "Version")
+                        .IsUnique();
+
+                    b.ToTable("npa_documents", "ref");
+                });
+
+            modelBuilder.Entity("Csms.Infrastructure.NpaRuleRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConditionText")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<double>("Confidence")
+                        .HasColumnType("double precision");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("InheritedFrom")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<bool>("IsInherited")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("Okpd2Code")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Quote")
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)");
+
+                    b.Property<string>("RuleType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<int?>("SourcePage")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SourceRow")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId", "Okpd2Code")
+                        .HasDatabaseName("ix_npa_rules_document_code");
+
+                    b.HasIndex("DocumentId", "Okpd2Code", "IsInherited")
+                        .IsUnique();
+
+                    b.ToTable("npa_rules", "ref");
+                });
+
             modelBuilder.Entity("Csms.Infrastructure.ReferenceDatasetRow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -544,6 +681,17 @@ namespace Csms.Infrastructure.Migrations
                     b.ToTable("items", "ref");
                 });
 
+            modelBuilder.Entity("Csms.Infrastructure.NpaRuleRow", b =>
+                {
+                    b.HasOne("Csms.Infrastructure.NpaDocumentRow", "Document")
+                        .WithMany("Rules")
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Document");
+                });
+
             modelBuilder.Entity("Csms.Infrastructure.ReferenceItemRow", b =>
                 {
                     b.HasOne("Csms.Infrastructure.ReferenceDatasetRow", "Dataset")
@@ -553,6 +701,11 @@ namespace Csms.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Dataset");
+                });
+
+            modelBuilder.Entity("Csms.Infrastructure.NpaDocumentRow", b =>
+                {
+                    b.Navigation("Rules");
                 });
 
             modelBuilder.Entity("Csms.Infrastructure.ReferenceDatasetRow", b =>

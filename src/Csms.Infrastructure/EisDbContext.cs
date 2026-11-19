@@ -23,6 +23,11 @@ public sealed class EisDbContext(DbContextOptions<EisDbContext> options) : DbCon
 
     public DbSet<ReferenceItemRow> ReferenceItems => Set<ReferenceItemRow>();
 
+    /// <summary>Версии правил по официальным актам и сами правила по ОКПД2.</summary>
+    public DbSet<NpaDocumentRow> NpaDocuments => Set<NpaDocumentRow>();
+
+    public DbSet<NpaRuleRow> NpaRules => Set<NpaRuleRow>();
+
     // Пользователи, организации и права живут в отдельной схеме: это не
     // пакеты ЕИС и не версии справочников, у них свой жизненный цикл.
     public DbSet<AccessOrganizationRow> AccessOrganizations => Set<AccessOrganizationRow>();
@@ -128,6 +133,60 @@ public sealed class EisDbContext(DbContextOptions<EisDbContext> options) : DbCon
         });
 
         ConfigureAccess(builder);
+        ConfigureNpa(builder);
+    }
+
+    /// <summary>
+    /// Правила НПА: версия акта и правила по кодам ОКПД2. Активная версия одна
+    /// на акт — тот же приём, что и у справочников: фильтрованный уникальный
+    /// индекс не даёт двум прогонам агента включить две версии сразу.
+    /// </summary>
+    private static void ConfigureNpa(ModelBuilder builder)
+    {
+        builder.Entity<NpaDocumentRow>(entity =>
+        {
+            entity.ToTable("npa_documents", "ref");
+            entity.HasKey(row => row.Id);
+
+            entity.Property(row => row.Code).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.Version).HasMaxLength(128).IsRequired();
+            entity.Property(row => row.EoNumber).HasMaxLength(32);
+            entity.Property(row => row.Number).HasMaxLength(32);
+            entity.Property(row => row.Title).HasMaxLength(1024).IsRequired();
+            entity.Property(row => row.SourceUrl).HasMaxLength(2048);
+            entity.Property(row => row.PdfSha256).HasMaxLength(64);
+            entity.Property(row => row.OcrEngine).HasMaxLength(128);
+            entity.Property(row => row.UnresolvedJson).HasColumnType("jsonb");
+
+            entity.HasIndex(row => new { row.Code, row.Version }).IsUnique();
+            entity.HasIndex(row => row.Code)
+                .IsUnique()
+                .HasFilter("\"IsActive\" = TRUE");
+        });
+
+        builder.Entity<NpaRuleRow>(entity =>
+        {
+            entity.ToTable("npa_rules", "ref");
+            entity.HasKey(row => row.Id);
+
+            entity.Property(row => row.Okpd2Code).HasMaxLength(32).IsRequired();
+            entity.Property(row => row.RuleType).HasMaxLength(16).IsRequired();
+            entity.Property(row => row.ConditionText).HasMaxLength(2048);
+            entity.Property(row => row.Quote).HasMaxLength(4096);
+            entity.Property(row => row.InheritedFrom).HasMaxLength(32);
+            entity.Property(row => row.Status).HasMaxLength(24).IsRequired();
+            entity.Property(row => row.Note).HasMaxLength(1024);
+
+            entity.HasIndex(row => new { row.DocumentId, row.Okpd2Code, row.IsInherited }).IsUnique();
+            // Поиск действующего правила идёт по префиксу кода (26.20%).
+            entity.HasIndex(row => new { row.DocumentId, row.Okpd2Code })
+                .HasDatabaseName("ix_npa_rules_document_code");
+
+            entity.HasOne(row => row.Document)
+                .WithMany(document => document.Rules)
+                .HasForeignKey(row => row.DocumentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
     }
 
     /// <summary>
