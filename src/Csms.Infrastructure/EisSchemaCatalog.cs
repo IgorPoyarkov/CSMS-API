@@ -25,6 +25,25 @@ public sealed class EisSchemaCatalog : IEisSchemaCatalog
             : Path.GetFullPath(rootDirectory);
     }
 
+    /// <summary>
+    /// Сбросить кеш версии после автообновления: каталог мог прочитать старые
+    /// файлы до подмены каталога и продолжал бы выдавать их до перезапуска.
+    /// </summary>
+    public void Invalidate(string schemaVersion)
+    {
+        if (!string.IsNullOrWhiteSpace(schemaVersion))
+        {
+            _cache.TryRemove(schemaVersion.Trim(), out _);
+        }
+    }
+
+    /// <summary>
+    /// Проверить, компилируется ли каталог XSD целиком. Используется
+    /// автообновлением до подмены активных схем: бракованный архив не должен
+    /// выбить шлюз из рабочего состояния.
+    /// </summary>
+    public static IReadOnlyList<string> CheckDirectory(string directory) => Check(directory).Errors;
+
     public bool HasSchema(string schemaVersion)
     {
         var directory = GetDirectory(schemaVersion);
@@ -103,7 +122,9 @@ public sealed class EisSchemaCatalog : IEisSchemaCatalog
                 : null;
     }
 
-    private static SchemaBundle Load(string directory)
+    private static SchemaBundle Load(string directory) => Check(directory);
+
+    private static SchemaBundle Check(string directory)
     {
         var errors = new List<string>();
         var set = new XmlSchemaSet { XmlResolver = null };

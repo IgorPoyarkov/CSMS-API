@@ -56,8 +56,35 @@ builder.Services.AddSingleton<IEisDocumentXmlBuilder, PlaceholderXmlBuilder>();
 
 // Папку схем можно переопределить переменной EIS_SCHEMAS_ROOT. По умолчанию
 // схемы ищутся рядом с выполненной сборкой: schemas/<версия>/*.xsd.
-builder.Services.AddSingleton<IEisSchemaCatalog>(
-    _ => new EisSchemaCatalog(builder.Configuration["EIS_SCHEMAS_ROOT"]));
+// Один и тот же экземпляр каталога нужен обновлятору, чтобы сбросить кеш
+// сразу после подмены файлов версии.
+var schemaRoot = builder.Configuration["EIS_SCHEMAS_ROOT"];
+var schemaCatalog = new EisSchemaCatalog(schemaRoot);
+builder.Services.AddSingleton(schemaCatalog);
+builder.Services.AddSingleton<IEisSchemaCatalog>(schemaCatalog);
+
+// Автообновление Альбома форматов: страница документов → ZIP → проверка XSD →
+// атомарная подмена папки версии. Настройки читаются из EisSchemas:Update.
+var schemaOptions = new EisSchemaSourceOptions();
+builder.Configuration.GetSection(EisSchemaSourceOptions.SectionName).Bind(schemaOptions);
+schemaOptions.Validate();
+builder.Services.AddSingleton(schemaOptions);
+builder.Services.AddSingleton<EisSchemaUpdateStatus>();
+
+builder.Services.AddHttpClient("eis-schemas", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(schemaOptions.HttpTimeoutSeconds);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Csms.EisSchemaUpdater/1.0");
+});
+
+builder.Services.AddSingleton<EisSchemaDownloader>(provider => new EisSchemaDownloader(
+    provider.GetRequiredService<IHttpClientFactory>().CreateClient("eis-schemas"),
+    schemaOptions,
+    provider.GetRequiredService<EisSchemaUpdateStatus>(),
+    provider.GetRequiredService<ILogger<EisSchemaDownloader>>(),
+    schemaRoot,
+    version => schemaCatalog.Invalidate(version)));
+builder.Services.AddHostedService<EisSchemaUpdateWorker>();
 
 builder.Services.AddSingleton<IEisTransport, MockEisTransport>();
 builder.Services.AddSingleton<EisPackageService>();
@@ -72,5 +99,6 @@ app.MapOpenApi();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapEisPackageEndpoints();
+app.MapEisSchemaEndpoints();
 
 app.Run();
