@@ -23,6 +23,20 @@ public sealed class EisDbContext(DbContextOptions<EisDbContext> options) : DbCon
 
     public DbSet<ReferenceItemRow> ReferenceItems => Set<ReferenceItemRow>();
 
+    // Пользователи, организации и права живут в отдельной схеме: это не
+    // пакеты ЕИС и не версии справочников, у них свой жизненный цикл.
+    public DbSet<AccessOrganizationRow> AccessOrganizations => Set<AccessOrganizationRow>();
+    public DbSet<AccessUserRow> AccessUsers => Set<AccessUserRow>();
+    public DbSet<AccessEmployeeRow> AccessEmployees => Set<AccessEmployeeRow>();
+    public DbSet<AccessContractServiceRow> AccessContractServices => Set<AccessContractServiceRow>();
+    public DbSet<AccessFunctionRow> AccessFunctions => Set<AccessFunctionRow>();
+    public DbSet<AccessRequestRow> AccessRequests => Set<AccessRequestRow>();
+    public DbSet<AccessRoleRow> AccessRoles => Set<AccessRoleRow>();
+    public DbSet<AccessPermissionRow> AccessPermissions => Set<AccessPermissionRow>();
+    public DbSet<AccessRolePermissionRow> AccessRolePermissions => Set<AccessRolePermissionRow>();
+    public DbSet<AccessUserRoleRow> AccessUserRoles => Set<AccessUserRoleRow>();
+    public DbSet<AccessSessionRow> AccessSessions => Set<AccessSessionRow>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         builder.HasDefaultSchema("eis");
@@ -111,6 +125,130 @@ public sealed class EisDbContext(DbContextOptions<EisDbContext> options) : DbCon
                 .WithMany(dataset => dataset.Items)
                 .HasForeignKey(row => row.DatasetId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        ConfigureAccess(builder);
+    }
+
+    /// <summary>
+    /// Исходные документы фронта хранятся jsonb: при переходе с json-server
+    /// нельзя терять поля, которые пока не участвуют в проверке прав. Ключи
+    /// (email, organizationKey, code) вынесены в колонки для поиска.
+    /// </summary>
+    private static void ConfigureAccess(ModelBuilder builder)
+    {
+        builder.Entity<AccessOrganizationRow>(entity =>
+        {
+            entity.ToTable("organizations", "access");
+            entity.HasKey(row => row.Id);
+            entity.Property(row => row.ExternalKey).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.Inn).HasMaxLength(32);
+            entity.Property(row => row.Data).HasColumnType("jsonb").IsRequired();
+            entity.HasIndex(row => row.ExternalKey).IsUnique();
+        });
+
+        builder.Entity<AccessUserRow>(entity =>
+        {
+            entity.ToTable("users", "access");
+            entity.HasKey(row => row.Id);
+            entity.Property(row => row.ExternalKey).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.Email).HasMaxLength(256).IsRequired();
+            entity.Property(row => row.PasswordHash).HasMaxLength(256).IsRequired();
+            entity.Property(row => row.OrganizationKey).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.EmployeeKey).HasMaxLength(64);
+            entity.Property(row => row.Data).HasColumnType("jsonb").IsRequired();
+            entity.HasIndex(row => row.ExternalKey).IsUnique();
+            entity.HasIndex(row => row.Email).IsUnique();
+            entity.HasIndex(row => row.OrganizationKey);
+        });
+
+        builder.Entity<AccessEmployeeRow>(entity =>
+        {
+            entity.ToTable("employees", "access");
+            entity.HasKey(row => row.Id);
+            entity.Property(row => row.ExternalKey).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.OrganizationKey).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.UserKey).HasMaxLength(64);
+            entity.Property(row => row.Data).HasColumnType("jsonb").IsRequired();
+            entity.HasIndex(row => row.ExternalKey).IsUnique();
+            entity.HasIndex(row => row.OrganizationKey);
+            entity.HasIndex(row => row.UserKey);
+        });
+
+        builder.Entity<AccessContractServiceRow>(entity =>
+        {
+            entity.ToTable("contract_services", "access");
+            entity.HasKey(row => row.Id);
+            entity.Property(row => row.ExternalKey).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.OrganizationKey).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.Data).HasColumnType("jsonb").IsRequired();
+            entity.HasIndex(row => row.ExternalKey).IsUnique();
+            entity.HasIndex(row => row.OrganizationKey).IsUnique();
+        });
+
+        builder.Entity<AccessFunctionRow>(entity =>
+        {
+            entity.ToTable("functions", "access");
+            entity.HasKey(row => row.Id);
+            entity.Property(row => row.Code).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.Data).HasColumnType("jsonb").IsRequired();
+            entity.HasIndex(row => row.Code).IsUnique();
+        });
+
+        builder.Entity<AccessRequestRow>(entity =>
+        {
+            entity.ToTable("requests", "access");
+            entity.HasKey(row => row.Id);
+            entity.Property(row => row.ExternalKey).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.OrganizationKey).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.EmployeeKey).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.Status).HasMaxLength(32).IsRequired();
+            entity.Property(row => row.Data).HasColumnType("jsonb").IsRequired();
+            entity.HasIndex(row => row.ExternalKey).IsUnique();
+        });
+
+        builder.Entity<AccessRoleRow>(entity =>
+        {
+            entity.ToTable("roles", "access");
+            entity.HasKey(row => row.Id);
+            entity.Property(row => row.Code).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.Name).HasMaxLength(256).IsRequired();
+            entity.HasIndex(row => row.Code).IsUnique();
+        });
+
+        builder.Entity<AccessPermissionRow>(entity =>
+        {
+            entity.ToTable("permissions", "access");
+            entity.HasKey(row => row.Id);
+            entity.Property(row => row.Code).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.Name).HasMaxLength(256).IsRequired();
+            entity.HasIndex(row => row.Code).IsUnique();
+        });
+
+        builder.Entity<AccessRolePermissionRow>(entity =>
+        {
+            entity.ToTable("role_permissions", "access");
+            entity.HasKey(row => new { row.RoleCode, row.PermissionCode });
+            entity.Property(row => row.RoleCode).HasMaxLength(64);
+            entity.Property(row => row.PermissionCode).HasMaxLength(64);
+        });
+
+        builder.Entity<AccessUserRoleRow>(entity =>
+        {
+            entity.ToTable("user_roles", "access");
+            entity.HasKey(row => new { row.UserKey, row.RoleCode });
+            entity.Property(row => row.UserKey).HasMaxLength(64);
+            entity.Property(row => row.RoleCode).HasMaxLength(64);
+        });
+
+        builder.Entity<AccessSessionRow>(entity =>
+        {
+            entity.ToTable("sessions", "access");
+            entity.HasKey(row => row.Token);
+            entity.Property(row => row.Token).HasMaxLength(64);
+            entity.Property(row => row.UserKey).HasMaxLength(64).IsRequired();
+            entity.HasIndex(row => row.UserKey);
+            entity.HasIndex(row => row.ExpiresAt);
         });
     }
 }

@@ -30,7 +30,9 @@ public sealed class DomainExceptionHandler(IProblemDetailsService problemDetails
             ProblemDetails = new ProblemDetails
             {
                 Status = StatusCodes.Status409Conflict,
-                Title = "Действие недопустимо в текущем состоянии пакета",
+                // Заголовок общий: обработчик обслуживает и пакеты ЕИС, и
+                // доступ, где «состояние пакета» было бы неправдой.
+                Title = "Действие недопустимо в текущем состоянии",
                 Detail = domainError.Message,
             },
         });

@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Csms.Api;
+using Microsoft.AspNetCore.Authentication;
 using Csms.Application;
 using Csms.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +26,14 @@ builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 builder.Services.AddOpenApi();
 
+// Авторизация пока не включает RequireAuthorization: контур доступа вводится
+// параллельно текущему json-server-режиму. standalone-эндпоинты /api/access
+// сами проверяют токен и возвращают 401 в формате JSON.
+builder.Services.AddAuthentication(SessionAuthenticationHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, SessionAuthenticationHandler>(
+        SessionAuthenticationHandler.SchemeName, _ => { });
+builder.Services.AddAuthorization();
+
 builder.Services.AddSingleton(TimeProvider.System);
 
 // Хранилище выбирается переключателем: по умолчанию память, чтобы тесты и
@@ -47,11 +56,13 @@ if (store == "postgres")
     builder.Services.AddDbContextFactory<EisDbContext>(options => options.UseNpgsql(connectionString));
     builder.Services.AddSingleton<IEisPackageRepository, EfCoreEisPackageRepository>();
     builder.Services.AddSingleton<IReferenceDataStore, EfCoreReferenceDataStore>();
+    builder.Services.AddSingleton<IAccessStore, EfCoreAccessStore>();
 }
 else
 {
     builder.Services.AddSingleton<IEisPackageRepository, InMemoryEisPackageRepository>();
     builder.Services.AddSingleton<IReferenceDataStore, InMemoryReferenceDataStore>();
+    builder.Services.AddSingleton<IAccessStore, InMemoryAccessStore>();
 }
 
 // Импорт справочников рассылается фронту отдельным SSE-потоком
@@ -126,11 +137,14 @@ builder.Services.AddSingleton<EisNsiTreeImporter>(provider => new EisNsiTreeImpo
 
 builder.Services.AddSingleton<IEisTransport, MockEisTransport>();
 builder.Services.AddSingleton<EisPackageService>();
+builder.Services.AddSingleton<AccessService>();
 
 var app = builder.Build();
 
 app.UseExceptionHandler();
 app.UseCors(FrontendPolicy);
+app.UseAuthentication();
+app.UseAuthorization();
 
 // Контракт для фронта: /openapi/v1.json
 app.MapOpenApi();
@@ -139,5 +153,6 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapEisPackageEndpoints();
 app.MapEisSchemaEndpoints();
 app.MapReferenceDataEndpoints();
+app.MapAccessEndpoints();
 
 app.Run();
