@@ -13,8 +13,11 @@ public sealed class EisPackageService(
     IEisPackageRepository repository,
     IEisTransport transport,
     IEisDocumentXmlBuilder xmlBuilder,
+    IEisSchemaCatalog schemaCatalog,
     TimeProvider clock)
 {
+    private readonly IEisSchemaCatalog _schemaCatalog = schemaCatalog;
+
     private DateTimeOffset Now => clock.GetUtcNow();
 
     public Task<IReadOnlyList<EisPackage>> ListAsync(CancellationToken cancellationToken) =>
@@ -34,6 +37,8 @@ public sealed class EisPackageService(
             command.DocumentType,
             EisRegistryNumber.Normalize(command.ContractEisNumber),
             (command.Ikz ?? string.Empty).Trim());
+
+        EnsureXsdValid(built);
 
         var package = EisPackage.Create(
             command.DocumentType,
@@ -170,6 +175,34 @@ public sealed class EisPackageService(
     }
 
     /// <summary>
+    /// Проверить XML до сохранения и подписания.
+    ///
+    /// Для черновика (placeholder) и для версии без загруженных XSD проверка
+    /// пропускается: притворяться пройденной валидацией нельзя. Как только
+    /// схема версии появится в каталоге, ошибки станут ошибкой запроса, а не
+    /// сюрпризом от ФЛК ЕИС после отправки.
+    /// </summary>
+    private void EnsureXsdValid(XmlBuildResult built)
+    {
+        if (built.IsPlaceholder || !_schemaCatalog.HasSchema(built.SchemaVersion))
+        {
+            return;
+        }
+
+        var errors = _schemaCatalog.Validate(built.Xml, built.SchemaVersion);
+
+        if (errors.Count == 0)
+        {
+            return;
+        }
+
+        throw new DomainException(
+            $"XML не соответствует XSD версии {built.SchemaVersion}: " +
+            string.Join("; ", errors.Take(3)) +
+            (errors.Count > 3 ? $" … и ещё {errors.Count - 3}." : "."));
+    }
+
+    /// <summary>
     /// Сохранить пакет и перевести конфликт хранилища в слова для человека.
     ///
     /// Два окна или два нажатия «Отправить» не должны превращаться в ошибку
@@ -199,6 +232,8 @@ public sealed class EisPackageService(
             package.DocumentType,
             package.ContractEisNumber,
             package.Ikz);
+
+        EnsureXsdValid(rebuilt);
 
         package.UpdatePayload(rebuilt.Xml, rebuilt.SchemaVersion, Now);
 

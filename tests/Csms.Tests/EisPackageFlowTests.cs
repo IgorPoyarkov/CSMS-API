@@ -27,6 +27,7 @@ public sealed class EisPackageFlowTests
             new InMemoryEisPackageRepository(),
             new MockEisTransport(),
             new PlaceholderXmlBuilder(),
+            new EisSchemaCatalog(Path.Combine(Path.GetTempPath(), "csms-tests-no-schemas")),
             TimeProvider.System);
 
     private static async Task<EisPackage> CreateAsync(EisPackageService service, string number)

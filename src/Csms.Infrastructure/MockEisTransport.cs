@@ -29,6 +29,11 @@ public sealed class MockEisTransport : IEisTransport
                 "Шлюз ЕИС недоступен (имитация): истёк таймаут соединения. Отправку можно повторить.");
         }
 
+        // Даже заглушка должна собирать архив: ошибки упаковки (нет подписи,
+        // битый base64) тогда видны сразу, а не после подключения реального
+        // шлюза. Base64 здесь не передаётся — проверяется только собираемость.
+        _ = EisPackageArchiver.BuildBase64Zip(package);
+
         var eisGuid = Guid.NewGuid().ToString("D");
         _polls[eisGuid] = 0;
 

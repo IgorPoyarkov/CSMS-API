@@ -53,6 +53,7 @@ public sealed class EisPackagePostgresTests
             new EfCoreEisPackageRepository(new EisDbContextFactory(options)),
             new MockEisTransport(),
             new PlaceholderXmlBuilder(),
+            new EisSchemaCatalog(Path.Combine(Path.GetTempPath(), "csms-tests-no-schemas")),
             TimeProvider.System);
     }
 

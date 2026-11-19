@@ -53,6 +53,12 @@ else
 }
 
 builder.Services.AddSingleton<IEisDocumentXmlBuilder, PlaceholderXmlBuilder>();
+
+// Папку схем можно переопределить переменной EIS_SCHEMAS_ROOT. По умолчанию
+// схемы ищутся рядом с выполненной сборкой: schemas/<версия>/*.xsd.
+builder.Services.AddSingleton<IEisSchemaCatalog>(
+    _ => new EisSchemaCatalog(builder.Configuration["EIS_SCHEMAS_ROOT"]));
+
 builder.Services.AddSingleton<IEisTransport, MockEisTransport>();
 builder.Services.AddSingleton<EisPackageService>();
 
