@@ -56,6 +56,7 @@ public static class NpaEndpoints
             string? status,
             int? skip,
             int? take,
+            bool? directOnly,
             NpaOptions options,
             INpaRuleStore store,
             CancellationToken cancellationToken) =>
@@ -66,7 +67,8 @@ public static class NpaEndpoints
                 status,
                 skip ?? 0,
                 take ?? options.DefaultPageSize,
-                cancellationToken);
+                cancellationToken,
+                directOnly ?? false);
 
             return Results.Ok(rules);
         })

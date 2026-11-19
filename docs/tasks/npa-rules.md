@@ -57,8 +57,10 @@
 - `GET /api/npa/config` — список ведомых актов и режимов.
 - `GET /api/npa/documents`, `GET /api/npa/documents/{code}` — версии и активная
   версия (включая `unresolvedJson` — строки для ручной разметки).
-- `GET /api/npa/documents/{code}/rules?search=&status=&skip=&take=` — правила
-  активной версии (постранично; `skip` обязателен для выгрузки всех 17 тыс.).
+- `GET /api/npa/documents/{code}/rules?search=&status=&skip=&take=&directOnly=true`
+  — правила активной версии (постранично; `skip` обязателен для выгрузки всех
+  17 тыс.). `directOnly=true` отдаёт только прямые правила (107/973/58) — этого
+  достаточно фронту, чтобы восстановить дерево по префиксам ОКПД2.
 - `GET /api/npa/documents/{code}/effective?okpd2Code=...&includePending=false`
   — действующее правило для кода (ближайший предок).
 - `POST /api/npa/documents/{code}/sync?force=true&dryRun=false` — скачать и
@@ -67,6 +69,19 @@
   (`.pdf`/`.docx`, `multipart/form-data`, поле `file`, до 32 МБ).
 - `POST /api/npa/documents/{code}/rules/{okpd2Code}/verify` — решение человека:
   `approved` / `rejected` / `needs_review` с заметкой.
+
+## Потребитель на фронте (`csms`)
+
+- `GET /api/references/nsiOKPD2/all` — весь активный снимок без `payloadJson`
+  (21 066 кодов); `GET /api/references/{dataset}/items` остаётся для поиска.
+- `src/services/Npa/npa.api.ts` — typed-клиент: `fetchNpaDirectRules`,
+  `useNpaDocuments`, `useNpaRuleIndex`, `useNpaEffective`.
+- `src/services/Npa/npaControl.ts` — синхронный резолвер по прямым правилам
+  (самый длинный префикс, `exclude` сильнее) для zod-схем и `useMemo`.
+- `useOkpd2Dictionary` строит справочник по снимку НСИ, накладывает локальные
+  признаки нормирования из `okpd2Refs` и публикует индекс правил НПА. Пока индекс
+  не загружен, `auctionListControl.ts` работает по историческому эталону 471-р
+  2022 года. `needs_review` возвращается флагом и не скрывается от человека.
 
 ## Запуск и проверки
 

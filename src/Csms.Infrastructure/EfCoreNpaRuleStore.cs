@@ -44,7 +44,8 @@ public sealed class EfCoreNpaRuleStore(
         string? status,
         int skip,
         int take,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool directOnly = false)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
 
@@ -62,6 +63,13 @@ public sealed class EfCoreNpaRuleStore(
         var query = db.NpaRules
             .AsNoTracking()
             .Where(rule => rule.DocumentId == active.Id);
+
+        // Фронту нужны только прямые правила: унаследованные он восстановит
+        // сам по префиксу, а тащить десятки тысяч строк в браузер незачем.
+        if (directOnly)
+        {
+            query = query.Where(rule => !rule.IsInherited);
+        }
 
         if (!string.IsNullOrWhiteSpace(status))
         {

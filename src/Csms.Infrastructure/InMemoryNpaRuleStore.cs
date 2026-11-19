@@ -43,7 +43,8 @@ public sealed class InMemoryNpaRuleStore : INpaRuleStore
         string? status,
         int skip,
         int take,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool directOnly = false)
     {
         lock (_gate)
         {
@@ -54,6 +55,11 @@ public sealed class InMemoryNpaRuleStore : INpaRuleStore
             }
 
             var query = rules.AsEnumerable();
+            if (directOnly)
+            {
+                query = query.Where(rule => !rule.IsInherited);
+            }
+
             if (!string.IsNullOrWhiteSpace(status))
             {
                 query = query.Where(rule => rule.Status == status);

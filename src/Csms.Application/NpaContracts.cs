@@ -139,7 +139,8 @@ public interface INpaRuleStore
         string? status,
         int skip,
         int take,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        bool directOnly = false);
 
     /// <summary>
     /// Действующее правило для кода ОКПД2: ближайший предок (включая сам код).

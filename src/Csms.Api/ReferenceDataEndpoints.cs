@@ -21,6 +21,25 @@ public static class ReferenceDataEndpoints
             .Produces<IReadOnlyList<ReferenceDatasetInfo>>()
             .WithSummary("Версии загруженных справочников и их хеши");
 
+        // Полный активный снимок без payloadJson: нужен фронту, чтобы работать
+        // со всеми кодами ОКПД2, а не только с локальной выборкой заказчика.
+        group.MapGet("/{dataset}/all", async (
+            string dataset,
+            IReferenceDataStore store,
+            CancellationToken cancellationToken) =>
+        {
+            var items = await store.GetAllAsync(dataset, cancellationToken);
+
+            return Results.Ok(items.Select(item => new
+            {
+                item.Code,
+                item.Name,
+                item.ParentCode,
+                item.Actual,
+            }));
+        })
+        .WithSummary("Все записи активной версии справочника (без исходного payload)");
+
         group.MapGet("/{dataset}/items", async (
             string dataset,
             string? search,
