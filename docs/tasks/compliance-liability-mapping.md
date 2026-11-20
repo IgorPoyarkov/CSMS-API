@@ -446,24 +446,46 @@ probability вне диапазона, разделение факта и усл
 - `src/Csms.Api/appsettings.json` — раздел `LiabilityMapping` (endpoint, model,
   embeddingModel, timeout, maxRetries, retryBaseDelayMs).
 
-### Предпосылка: pgvector
+### Предпосылка: pgvector (выполнено 2026-11-20)
 
-Миграция выполняет `CREATE EXTENSION IF NOT EXISTS vector`. Если расширение не
-установлено в кластере, миграция падает с `0A000: extension "vector" is not
-available`. Это произошло на локальном кластере :5433 — DDL и код готовы, но для
-живого прогона нужно установить pgvector (>=0.5 для HNSW) и повторить:
+Миграция выполняет `CREATE EXTENSION IF NOT EXISTS vector`. Первый запуск на
+локальном кластере :5433 упал с `0A000: extension "vector" is not available`.
+Расширение установлено из готовой сборки pgvector **0.8.7** для PostgreSQL 17
+(Windows x64, `andreiramani/pgvector_pgsql_windows`, SHA-256 архива
+`acd9d678200e856623f0b7416f6f5d132ef8606a2273ff37f0fdf8a7f2c5d7d2`): файлы
+распакованы в `C:\Program Files\PostgreSQL\17`, служба `postgresql-x64-17`
+перезапущена, команда миграции выполнена успешно:
 
 ```powershell
-dotnet ef database update --project src/Csms.Infrastructure --startup-project src/Csms.Api
+dotnet ef database update --no-build --project src/Csms.Infrastructure --startup-project src/Csms.Api
 ```
 
+Проверено: `SELECT extname, extversion FROM pg_extension WHERE extname='vector'`
+возвращает `vector | 0.8.7`; в схеме `legal` созданы все 5 таблиц; миграция
+`20261120041526_AddLegalLiabilityMapping` записана в
+`public."__EFMigrationsHistory"`. (`--no-build` использован, потому что
+запущенный экземпляр API блокировал DLL — перед привычным `dotnet build`
+его нужно остановить.)
+
 В `EIS_STORE=memory` регистрируется `EmptyLiabilityRetriever`: эндпоинт работает,
-возвращает `CandidateCount=0` и не вызывает модель.
+возвращает `CandidateCount=0` и не вызывает модель. Полный конвейер требует
+`EIS_STORE=postgres`.
+
+### JSON-контракт ответа
+
+Поля верхнего уровня: `duty_id`, `run_id`, `violation_hypotheses`,
+`matched_liabilities`, `candidate_count`, `model_version`, `prompt_version`,
+`calculated_at`, `requires_human_review`. Внутри `violation_hypotheses`: `id`,
+`kind`, `text`, `duty_id`. Внутри `matched_liabilities`: `liability_node_id`,
+`norm_reference`, `match_degree`, `probability_score`, `qualifying_conditions`,
+`sanction_summary`, `legal_reasoning`, `requires_human_review`. `match_degree`
+сериализуется строчными `full|partial|blanket|irrelevant` через property-level
+конвертер — глобальный PascalCase-конвертер API не перекрывает его.
 
 ### Проверки (2026-11-20)
 
 - `dotnet build` — 0 ошибок (одно старое предупреждение xUnit2009 в unrelated-тесте).
-- `dotnet test --no-build` — **96 passed / 3 skipped**, из них 17 новых тестов модуля.
+- `dotnet test --no-build` — **97 passed / 3 skipped**, из них 18 новых тестов модуля.
 
 ### Пример запроса
 
