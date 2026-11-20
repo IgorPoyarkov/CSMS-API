@@ -1,0 +1,742 @@
+{
+  "rulesVersion": "pp2604-rules-v1",
+  "source": {
+    "act": "Постановление Правительства РФ от 31.12.2021 N 2604",
+    "appendix": "Приложение N 2 «Предельные величины значимости критериев оценки заявок»",
+    "portal": "publication.pravo.gov.ru",
+    "eoNumber": "0001202201040005",
+    "pdfPages": "27–29",
+    "classifier": "ОКПД2, активная версия НСИ ЕИС (zakupki.gov.ru)"
+  },
+  "categories": [
+    {
+      "id": "goods",
+      "label": "Товары, кроме пищевых продуктов из позиции 13",
+      "appendixRow": 1,
+      "appendixName": "Товары, за исключением пищевых продуктов, предусмотренных позицией 13 настоящего приложения",
+      "minPrice": 70,
+      "maxExpenses": 10,
+      "maxNonCost": 30
+    },
+    {
+      "id": "works_services",
+      "label": "Работы, услуги (общий случай)",
+      "appendixRow": 2,
+      "appendixName": "Работы, услуги, за исключением услуг, предусмотренных позициями 3 — 20 настоящего приложения",
+      "minPrice": 60,
+      "maxExpenses": 10,
+      "maxNonCost": 40
+    },
+    {
+      "id": "construction",
+      "label": "Строительство, реконструкция, капитальный ремонт, снос объекта капитального строительства",
+      "appendixRow": 3,
+      "appendixName": "Работы по строительству, реконструкции, капитальному ремонту, сносу объекта капитального строительства (в том числе линейного объекта), включая контракт жизненного цикла",
+      "minPrice": 60,
+      "maxExpenses": null,
+      "maxNonCost": 40
+    },
+    {
+      "id": "road",
+      "label": "Ремонт, содержание автомобильной дороги",
+      "appendixRow": 4,
+      "appendixName": "Работы по ремонту, содержанию автомобильной дороги",
+      "minPrice": 60,
+      "maxExpenses": null,
+      "maxNonCost": 40
+    },
+    {
+      "id": "building_repair",
+      "label": "Текущий ремонт зданий, сооружений",
+      "appendixRow": 5,
+      "appendixName": "Работы по текущему ремонту зданий, сооружений",
+      "minPrice": 60,
+      "maxExpenses": null,
+      "maxNonCost": 40
+    },
+    {
+      "id": "cultural_heritage",
+      "label": "Сохранение объектов культурного наследия (памятников истории и культуры)",
+      "appendixRow": 6,
+      "appendixName": "Работы по сохранению объектов культурного наследия (памятников истории и культуры народов Российской Федерации)",
+      "minPrice": 40,
+      "maxExpenses": null,
+      "maxNonCost": 60
+    },
+    {
+      "id": "museum_restoration",
+      "label": "Реставрация музейных предметов и музейных коллекций",
+      "appendixRow": 7,
+      "appendixName": "Работы по реставрации музейных предметов и музейных коллекций, включенных в состав Музейного фонда Российской Федерации",
+      "minPrice": 40,
+      "maxExpenses": null,
+      "maxNonCost": 60
+    },
+    {
+      "id": "archive_restoration",
+      "label": "Реставрация документов Архивного фонда, особо ценных и редких документов",
+      "appendixRow": 8,
+      "appendixName": "Работы по реставрации документов Архивного фонда Российской Федерации, особо ценных и редких документов, входящих в состав библиотечных фондов",
+      "minPrice": 40,
+      "maxExpenses": null,
+      "maxNonCost": 60
+    },
+    {
+      "id": "literature_art",
+      "label": "Создание произведения литературы или искусства",
+      "appendixRow": 9,
+      "appendixName": "Работы по созданию произведения литературы или искусства",
+      "minPrice": 0,
+      "maxExpenses": null,
+      "maxNonCost": 100
+    },
+    {
+      "id": "film",
+      "label": "Исполнение, финансирование проката или показа национального фильма",
+      "appendixRow": 10,
+      "appendixName": "Исполнение, финансирование проката или показа национального фильма",
+      "minPrice": 20,
+      "maxExpenses": null,
+      "maxNonCost": 80
+    },
+    {
+      "id": "research",
+      "label": "Научно-исследовательские, опытно-конструкторские, технологические работы",
+      "appendixRow": 11,
+      "appendixName": "Научно-исследовательские, опытно-конструкторские, технологические работы",
+      "minPrice": 20,
+      "maxExpenses": 10,
+      "maxNonCost": 80
+    },
+    {
+      "id": "it_systems",
+      "label": "Создание, развитие, обслуживание государственных и муниципальных информационных систем и сайтов",
+      "appendixRow": 12,
+      "appendixName": "Работы по созданию, развитию, функционированию, обслуживанию государственных, муниципальных информационных систем, официальных сайтов государственных, муниципальных органов, учреждений",
+      "minPrice": 30,
+      "maxExpenses": null,
+      "maxNonCost": 70
+    },
+    {
+      "id": "food_catering",
+      "label": "Общественное питание и поставка пищевых продуктов для образовательных, медицинских, социальных организаций и отдыха детей",
+      "appendixRow": 13,
+      "appendixName": "Услуги общественного питания и (или) поставка пищевых продуктов, закупаемых для образовательных организаций, организаций, осуществляющих медицинскую деятельность, организаций социального обслуживания, организаций отдыха детей и их оздоровления",
+      "minPrice": 40,
+      "maxExpenses": null,
+      "maxNonCost": 60
+    },
+    {
+      "id": "security",
+      "label": "Охрана объектов образовательных и научных организаций",
+      "appendixRow": 14,
+      "appendixName": "Услуги по обеспечению охраны объектов (территорий) образовательных организаций и научных организаций",
+      "minPrice": 40,
+      "maxExpenses": null,
+      "maxNonCost": 60
+    },
+    {
+      "id": "children_recreation",
+      "label": "Услуги по организации отдыха детей и их оздоровлению",
+      "appendixRow": 15,
+      "appendixName": "Услуги по организации отдыха детей и их оздоровлению",
+      "minPrice": 40,
+      "maxExpenses": null,
+      "maxNonCost": 60
+    },
+    {
+      "id": "medical",
+      "label": "Медицинские услуги",
+      "appendixRow": 16,
+      "appendixName": "Медицинские услуги",
+      "minPrice": 40,
+      "maxExpenses": null,
+      "maxNonCost": 60
+    },
+    {
+      "id": "education",
+      "label": "Образовательные услуги",
+      "appendixRow": 17,
+      "appendixName": "Образовательные услуги",
+      "minPrice": 40,
+      "maxExpenses": null,
+      "maxNonCost": 60
+    },
+    {
+      "id": "legal",
+      "label": "Юридические услуги",
+      "appendixRow": 18,
+      "appendixName": "Юридические услуги",
+      "minPrice": 40,
+      "maxExpenses": null,
+      "maxNonCost": 60
+    },
+    {
+      "id": "audit",
+      "label": "Аудиторские услуги",
+      "appendixRow": 19,
+      "appendixName": "Аудиторские услуги",
+      "minPrice": 40,
+      "maxExpenses": null,
+      "maxNonCost": 60
+    },
+    {
+      "id": "expertise",
+      "label": "Услуги по проведению экспертизы",
+      "appendixRow": 20,
+      "appendixName": "Услуги по проведению экспертизы",
+      "minPrice": 40,
+      "maxExpenses": null,
+      "maxNonCost": 60
+    }
+  ],
+  "rules": [
+    {
+      "prefix": "10",
+      "category": "food_catering",
+      "row": 13,
+      "basis": "purpose",
+      "classifierName": "Продукты пищевые / Напитки",
+      "condition": "поставка для образовательных организаций, организаций здравоохранения, социального обслуживания и отдыха детей",
+      "purpose": "food_for_social_orgs",
+      "sortOrder": -1
+    },
+    {
+      "prefix": "11",
+      "category": "food_catering",
+      "row": 13,
+      "basis": "purpose",
+      "classifierName": "Продукты пищевые / Напитки",
+      "condition": "поставка для образовательных организаций, организаций здравоохранения, социального обслуживания и отдыха детей",
+      "purpose": "food_for_social_orgs",
+      "sortOrder": -1
+    },
+    {
+      "prefix": "42.11",
+      "category": "road",
+      "row": 4,
+      "basis": "classifier",
+      "classifierName": "Дороги автомобильные и автомагистрали; строительные работы по строительству автомобильных дорог и автомагистралей",
+      "condition": "код включает также работы по ремонту и содержанию автомобильных дорог",
+      "purpose": null,
+      "sortOrder": 0
+    },
+    {
+      "prefix": "43.3",
+      "category": "building_repair",
+      "row": 5,
+      "basis": "classifier",
+      "classifierName": "Работы завершающие и отделочные в зданиях и сооружениях",
+      "needsReview": true,
+      "condition": "позиция 5 говорит о текущем ремонте; код 43.3 — завершающие и отделочные работы, подтвердите вид работ",
+      "purpose": null,
+      "sortOrder": 1
+    },
+    {
+      "prefix": "41",
+      "category": "construction",
+      "row": 3,
+      "basis": "classifier",
+      "classifierName": "Здания и работы по возведению зданий",
+      "purpose": null,
+      "sortOrder": 2
+    },
+    {
+      "prefix": "42",
+      "category": "construction",
+      "row": 3,
+      "basis": "classifier",
+      "classifierName": "Сооружения и строительные работы в области гражданского строительства",
+      "purpose": null,
+      "sortOrder": 3
+    },
+    {
+      "prefix": "43",
+      "category": "construction",
+      "row": 3,
+      "basis": "classifier",
+      "classifierName": "Работы строительные специализированные",
+      "purpose": null,
+      "sortOrder": 4
+    },
+    {
+      "prefix": "91.03",
+      "category": "cultural_heritage",
+      "row": 6,
+      "basis": "classifier",
+      "classifierName": "Услуги, связанные с деятельностью по использованию исторических мест, зданий и аналогичных туристических достопримечательностей",
+      "needsReview": true,
+      "condition": "позиция 6 — сохранение объектов культурного наследия; код 91.03 покрывает не только работы по сохранению",
+      "purpose": null,
+      "sortOrder": 5
+    },
+    {
+      "prefix": "71.11.23",
+      "category": "cultural_heritage",
+      "row": 6,
+      "basis": "classifier",
+      "classifierName": "Услуги в области архитектуры, связанные с реставрацией исторических зданий",
+      "needsReview": true,
+      "condition": "наименование указывает на реставрацию исторических зданий, но это архитектурные услуги, а не работы по сохранению объектов культурного наследия",
+      "purpose": null,
+      "sortOrder": 6
+    },
+    {
+      "prefix": "91.02",
+      "category": "museum_restoration",
+      "row": 7,
+      "basis": "classifier",
+      "classifierName": "Услуги музеев",
+      "needsReview": true,
+      "condition": "позиция 7 — реставрация предметов и коллекций Музейного фонда, а не любые услуги музеев",
+      "purpose": null,
+      "sortOrder": 7
+    },
+    {
+      "prefix": "91.01",
+      "category": "archive_restoration",
+      "row": 8,
+      "basis": "classifier",
+      "classifierName": "Услуги библиотек и архивов",
+      "needsReview": true,
+      "condition": "позиция 8 — реставрация документов Архивного фонда и библиотечных фондов",
+      "purpose": null,
+      "sortOrder": 8
+    },
+    {
+      "prefix": "86",
+      "category": "medical",
+      "row": 16,
+      "basis": "classifier",
+      "classifierName": "Услуги в области здравоохранения",
+      "purpose": null,
+      "sortOrder": 9
+    },
+    {
+      "prefix": "85.4",
+      "category": "children_recreation",
+      "row": 15,
+      "basis": "classifier",
+      "classifierName": "Услуги по дополнительному образованию",
+      "needsReview": true,
+      "condition": "в ОКПД2 нет отдельного кода «отдых детей и их оздоровление»; 85.4 выбран по близости наименования, нужна цель закупки",
+      "purpose": null,
+      "sortOrder": 10
+    },
+    {
+      "prefix": "85",
+      "category": "education",
+      "row": 17,
+      "basis": "classifier",
+      "classifierName": "Услуги в области образования",
+      "purpose": null,
+      "sortOrder": 11
+    },
+    {
+      "prefix": "69.1",
+      "category": "legal",
+      "row": 18,
+      "basis": "classifier",
+      "classifierName": "Услуги юридические",
+      "purpose": null,
+      "sortOrder": 12
+    },
+    {
+      "prefix": "69.2",
+      "category": "audit",
+      "row": 19,
+      "basis": "classifier",
+      "classifierName": "Услуги в области бухгалтерского учета; по проведению финансового аудита; по налоговому консультированию",
+      "needsReview": true,
+      "condition": "позиция 19 — аудиторские услуги; код 69.2 включает также бухгалтерский учёт и налоговое консультирование",
+      "purpose": null,
+      "sortOrder": 13
+    },
+    {
+      "prefix": "71.2",
+      "category": "expertise",
+      "row": 20,
+      "basis": "classifier",
+      "classifierName": "Услуги в области технических испытаний, исследований, анализа и сертификации",
+      "needsReview": true,
+      "condition": "позиция 20 — услуги по проведению экспертизы; код 71.2 шире (испытания, сертификация)",
+      "purpose": null,
+      "sortOrder": 14
+    },
+    {
+      "prefix": "72",
+      "category": "research",
+      "row": 11,
+      "basis": "classifier",
+      "classifierName": "Услуги и работы, связанные с научными исследованиями и экспериментальными разработками",
+      "purpose": null,
+      "sortOrder": 15
+    },
+    {
+      "prefix": "62",
+      "category": "it_systems",
+      "row": 12,
+      "basis": "classifier",
+      "classifierName": "Продукты программные и услуги по разработке программного обеспечения; консультационные услуги в области ИТ",
+      "needsReview": true,
+      "condition": "позиция 12 — только государственные/муниципальные информационные системы и официальные сайты",
+      "purpose": null,
+      "sortOrder": 16
+    },
+    {
+      "prefix": "63",
+      "category": "it_systems",
+      "row": 12,
+      "basis": "classifier",
+      "classifierName": "Услуги в области информационных технологий",
+      "needsReview": true,
+      "condition": "позиция 12 — только государственные/муниципальные информационные системы и официальные сайты",
+      "purpose": null,
+      "sortOrder": 17
+    },
+    {
+      "prefix": "80",
+      "category": "security",
+      "row": 14,
+      "basis": "classifier",
+      "classifierName": "Услуги по обеспечению безопасности и проведению расследований",
+      "needsReview": true,
+      "condition": "позиция 14 — охрана объектов образовательных и научных организаций; код 80 шире",
+      "purpose": null,
+      "sortOrder": 18
+    },
+    {
+      "prefix": "90",
+      "category": "literature_art",
+      "row": 9,
+      "basis": "classifier",
+      "classifierName": "Услуги в области творчества, искусства и развлечений",
+      "needsReview": true,
+      "condition": "позиция 9 — создание произведения литературы или искусства; код 90 включает иные развлекательные услуги",
+      "purpose": null,
+      "sortOrder": 19
+    },
+    {
+      "prefix": "59.1",
+      "category": "film",
+      "row": 10,
+      "basis": "classifier",
+      "classifierName": "Услуги по производству кинофильмов, видеофильмов и телевизионных программ",
+      "needsReview": true,
+      "condition": "позиция 10 — национальный фильм; код 59.1 покрывает любую кинопродукцию",
+      "purpose": null,
+      "sortOrder": 20
+    },
+    {
+      "prefix": "56",
+      "category": "food_catering",
+      "row": 13,
+      "basis": "classifier",
+      "classifierName": "Услуги общественного питания",
+      "purpose": null,
+      "sortOrder": 21
+    },
+    {
+      "prefix": "12",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Изделия табачные",
+      "purpose": null,
+      "sortOrder": 22
+    },
+    {
+      "prefix": "13",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Текстиль и изделия текстильные",
+      "purpose": null,
+      "sortOrder": 23
+    },
+    {
+      "prefix": "14",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Одежда",
+      "purpose": null,
+      "sortOrder": 24
+    },
+    {
+      "prefix": "15",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Кожа и изделия из кожи",
+      "purpose": null,
+      "sortOrder": 25
+    },
+    {
+      "prefix": "16",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Древесина и изделия из дерева и пробки, кроме мебели",
+      "purpose": null,
+      "sortOrder": 26
+    },
+    {
+      "prefix": "17",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Бумага и изделия из бумаги",
+      "purpose": null,
+      "sortOrder": 27
+    },
+    {
+      "prefix": "19",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Кокс и нефтепродукты",
+      "purpose": null,
+      "sortOrder": 28
+    },
+    {
+      "prefix": "20",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Вещества химические и продукты химические",
+      "purpose": null,
+      "sortOrder": 29
+    },
+    {
+      "prefix": "21",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Средства лекарственные и материалы, применяемые в медицинских целях",
+      "purpose": null,
+      "sortOrder": 30
+    },
+    {
+      "prefix": "22",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Изделия резиновые и пластмассовые",
+      "purpose": null,
+      "sortOrder": 31
+    },
+    {
+      "prefix": "23",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Продукты минеральные неметаллические прочие",
+      "purpose": null,
+      "sortOrder": 32
+    },
+    {
+      "prefix": "24",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Металлы основные",
+      "purpose": null,
+      "sortOrder": 33
+    },
+    {
+      "prefix": "25",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Изделия металлические готовые, кроме машин и оборудования",
+      "purpose": null,
+      "sortOrder": 34
+    },
+    {
+      "prefix": "26",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Оборудование компьютерное, электронное и оптическое",
+      "purpose": null,
+      "sortOrder": 35
+    },
+    {
+      "prefix": "27",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Оборудование электрическое",
+      "purpose": null,
+      "sortOrder": 36
+    },
+    {
+      "prefix": "28",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Машины и оборудование, не включенные в другие группировки",
+      "purpose": null,
+      "sortOrder": 37
+    },
+    {
+      "prefix": "29",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Средства автотранспортные, прицепы и полуприцепы",
+      "purpose": null,
+      "sortOrder": 38
+    },
+    {
+      "prefix": "30",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Средства транспортные и оборудование, прочие",
+      "purpose": null,
+      "sortOrder": 39
+    },
+    {
+      "prefix": "31",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Мебель",
+      "purpose": null,
+      "sortOrder": 40
+    },
+    {
+      "prefix": "32",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Изделия готовые прочие",
+      "purpose": null,
+      "sortOrder": 41
+    },
+    {
+      "prefix": "01",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Продукция и услуги сельского хозяйства и охоты",
+      "purpose": null,
+      "sortOrder": 42
+    },
+    {
+      "prefix": "02",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Продукция лесоводства, лесозаготовок и связанные с этим услуги",
+      "purpose": null,
+      "sortOrder": 43
+    },
+    {
+      "prefix": "03",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Рыба и прочая продукция рыболовства и рыбоводства",
+      "purpose": null,
+      "sortOrder": 44
+    },
+    {
+      "prefix": "05",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Уголь",
+      "purpose": null,
+      "sortOrder": 45
+    },
+    {
+      "prefix": "06",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Нефть и газ природный",
+      "purpose": null,
+      "sortOrder": 46
+    },
+    {
+      "prefix": "07",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Руды металлические",
+      "purpose": null,
+      "sortOrder": 47
+    },
+    {
+      "prefix": "08",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Продукция горнодобывающих производств прочая",
+      "purpose": null,
+      "sortOrder": 48
+    },
+    {
+      "prefix": "10",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Продукты пищевые",
+      "condition": "позиция 1 исключает пищевые продукты из позиции 13; при поставке для образовательных, медицинских, социальных организаций и отдыха детей применяется позиция 13",
+      "needsReview": true,
+      "purpose": null,
+      "sortOrder": 49
+    },
+    {
+      "prefix": "11",
+      "category": "goods",
+      "row": 1,
+      "basis": "classifier",
+      "classifierName": "Напитки",
+      "condition": "при поставке для образовательных, медицинских, социальных организаций и отдыха детей применяется позиция 13",
+      "needsReview": true,
+      "purpose": null,
+      "sortOrder": 50
+    },
+    {
+      "prefix": "09",
+      "category": "works_services",
+      "row": 2,
+      "basis": "classifier",
+      "classifierName": "Услуги в области добычи полезных ископаемых",
+      "purpose": null,
+      "sortOrder": 51
+    },
+    {
+      "prefix": "18",
+      "category": "works_services",
+      "row": 2,
+      "basis": "classifier",
+      "classifierName": "Услуги печатные и услуги по копированию",
+      "purpose": null,
+      "sortOrder": 52
+    },
+    {
+      "prefix": "33",
+      "category": "works_services",
+      "row": 2,
+      "basis": "classifier",
+      "classifierName": "Услуги по ремонту и монтажу машин и оборудования",
+      "purpose": null,
+      "sortOrder": 53
+    },
+    {
+      "prefix": "",
+      "category": "works_services",
+      "row": 2,
+      "basis": "residual",
+      "classifierName": "код ОКПД2 вне перечисленных разделов",
+      "condition": "остаточное правило позиции 2; для товаров проверьте, не подпадает ли код под позицию 1",
+      "purpose": null,
+      "sortOrder": 54
+    }
+  ]
+}

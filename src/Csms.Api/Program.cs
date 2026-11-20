@@ -6,6 +6,7 @@ using Csms.Infrastructure;
 using Csms.Infrastructure.Documents;
 using Csms.Infrastructure.Liability;
 using Csms.Infrastructure.Npa;
+using Csms.Infrastructure.Pp2604;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -61,6 +62,7 @@ if (store == "postgres")
     builder.Services.AddSingleton<INpaRuleStore, EfCoreNpaRuleStore>();
     builder.Services.AddSingleton<ILiabilityMappingStore, EfCoreLiabilityMappingStore>();
     builder.Services.AddSingleton<ILiabilityRetriever, EfCoreLiabilityRetriever>();
+    builder.Services.AddSingleton<IPp2604Catalog, EfCorePp2604Catalog>();
 }
 else
 {
@@ -72,6 +74,7 @@ else
     // В memory-режиме нет pgvector: пул пуст, но конвейер и эндпоинт живут.
     builder.Services.AddSingleton<ILiabilityMappingStore, InMemoryLiabilityMappingStore>();
     builder.Services.AddSingleton<ILiabilityRetriever, EmptyLiabilityRetriever>();
+    builder.Services.AddSingleton<IPp2604Catalog, InMemoryPp2604Catalog>();
 }
 
 // Импорт справочников рассылается фронту отдельным SSE-потоком
@@ -240,6 +243,7 @@ app.MapNpaEndpoints();
 app.MapDocumentFunctionEndpoints();
 app.MapOrder158nPoolEndpoints();
 app.MapLiabilityMappingEndpoints();
+app.MapPp2604Endpoints();
 app.MapContractChangeEndpoints();
 app.MapAccessEndpoints();
 
