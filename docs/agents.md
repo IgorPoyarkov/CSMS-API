@@ -15,7 +15,7 @@
 | **Автообновление XSD ЕИС** | фоновый `BackgroundService` | Раз в 720 мин проверяет Альбом ЕИС, скачивает ZIP с XSD/WSDL, атомарно меняет `schemas/<версия>/` | `csms-api`: `EisSchemaUpdateWorker`, `EisSchemaDownloader` | Работает; через API видно `status`, принудительный `/update` |
 | **Опрос ЕИС 44-FЗ `getDocsIP`** | отдельный `.NET 9` worker | Последовательно опрашивает регионы/подсистемы/даты, скачивает архивы, дедуплицирует документы | `csms/eis-parser/src/Eis44Parser.Worker/PollingWorker.cs` | Код и тесты готовы; live заблокирован токеном ЕИС/контуром (старый токен утёк в git) |
 | **Импортёр справочников НСИ** | on-demand импортёр, не демон | Обходит публичное дерево ЕИС и публикует версию набора с SHA-256 | `csms-api`: `EisNsiTreeImporter`, `/api/references/import/eis/{dataset}` | ОКПД2 загружен: 21 066 кодов; КТРУ/адреса ждут выгрузок по токену |
-| **Извлечение функций из документа** | планируемый конвейер Map/Reduce | Сегментирует любой НПА/регламент/ТЗ, выделяет атомарные подзадачи и раскладывает по таксономии контрактной службы | пока `csms-api/docs/tasks/document-functions-agent.md`, кода нет | Бриф готов; первый целевой документ — Приказ № 158н, эталон — `ORDER_158N_TASK_POOL` |
+| **Извлечение функций из документа** | конвейер Ingest→Map→Validate→Reduce→Curate (по запросу) | Сегментирует любой НПА/регламент/ТЗ, выделяет атомарные подзадачи и раскладывает по таксономии контрактной службы | `csms-api`: `DocumentExtractionService`, `Csms.Infrastructure/Documents/`, `DocumentFunctionsEndpoints.cs` | Реализован; 76 тестов зелёные; первый целевой документ — Приказ № 158н |
 
 ---
 
@@ -201,6 +201,48 @@ dotnet run --project eis-parser/src/Eis44Parser.Worker -- --check
 
 ---
 
+## 6. Агент извлечения функций из документа (третий LLM-агент)
+
+**Отличие от агентов НПА:** не ищет коды ОКПД2, а разбирает произвольный
+нормативный/организационный документ на функции и атомарные подзадачи контрактной
+службы. Работает **по запросу**, без фонового воркера, чтобы 14B не висела в VRAM.
+
+**Где:** `src/Csms.Infrastructure/Documents/` (сегментер, экстрактор текста, Map,
+Validate, Reduce, in-memory store), оркестратор `DocumentExtractionService`,
+эндпоинты `src/Csms.Api/DocumentFunctionsEndpoints.cs`, контракты —
+`src/Csms.Application/DocumentFunctionContracts.cs`, бриф —
+`docs/tasks/document-functions-agent.md`.
+
+**Конвейер:**
+
+1. `DocumentTextExtractor` — `.docx`/`.pdf`/`.txt`/`.md`; PDF идёт через Docnet +
+   Tesseract rus (тот же OCR, что и у агента НПА).
+2. `DocumentSegmenter` — детерминированная иерархия «раздел → пункт → подпункт»,
+   стабильные `segment_id` (`p-3-2-2-2`), `source_path`, цепочка `ancestors` с
+   текстами родителей, дробление абзацев >2000 символов по предложениям.
+3. Map — локальная `qwen2.5:14b-instruct-q4_K_M`, `temperature=0`,
+   `response_format=json_object`, `max_tokens=2048`, таймаут 900 с, 1 сегмент на
+   запрос (контекст модели 8192 токенов), массив `results` в ответе. Промпт прямо
+   запрещает подставлять текст по памяти: модель знает 158н наизусть и ошибалась
+   в цитатах, пока не добавлен few-shot пример и напоминание про `segment_text`.
+4. Validate — код проверяет, что цитата есть в сегменте, а срок/роль/условие —
+   в сегменте или в заголовках-предках; иначе `null` + `needs_review`.
+5. Reduce — дедупликация по нормализованному ключу `(глагол, объект, роль,
+   обязательность, условие)`; сохраняются все `source_paths`, `merge_reason`.
+6. Curate — все результаты стартуют в `needs_review`; подтверждение по ID:
+   `POST /api/documents/functions/{id}/verify`.
+
+**API:** `GET /api/documents/config`, `POST /api/documents/extract?dryRun=true`,
+`GET /api/documents/{sha256}/functions`, `GET /api/documents/{sha256}/report`,
+`POST /api/documents/functions/{id}/verify`.
+
+**Состояние (2026-11-20):** реализован, `dotnet test` — 76 passed / 3 skipped.
+Эталон для приёмки — `tests/Csms.Tests/Fixtures/order158n-golden.json` (41 пункт
+из `order158nTaskPool.ts`). Ограничения: хранилище in-memory, граф зависимостей
+и нечёткие пары Reduce не сделаны.
+
+---
+
 ## Одноразовые брифы (не запущенные процессы)
 
 Это задачи, которые мы выдавали агентам-исполнителям; пригодятся, чтобы не переписать
@@ -211,8 +253,9 @@ dotnet run --project eis-parser/src/Eis44Parser.Worker -- --check
 - `docs/tasks/reference-data.md` — справочники НСИ (ОКПД2 закрыт, КТРУ/адреса ждут);
 - `docs/tasks/postgres-persistence.md` — сохраняемость пакетов ЕИС в PostgreSQL
   (`EIS_STORE=postgres`, миграции, оптимистичная блокировка);
-- `docs/tasks/document-functions-agent.md` — новый агент: сегментация → Map →
-  Validate → Reduce → проверка человеком; первый целевой документ — Приказ № 158н;
+- `docs/tasks/document-functions-agent.md` — агент: сегментация → Map →
+  Validate → Reduce → проверка человеком (реализован, см. §6); первый целевой
+  документ — Приказ № 158н;
 - `docs/eis-nsi-soap.md` — шаблон запроса `getNsiRequest` и разбор архивов НСИ;
 - `docs/eis-open-questions.md` — открытые вопросы по обмену с ЕИС.
 

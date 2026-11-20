@@ -3,6 +3,7 @@ using Csms.Api;
 using Microsoft.AspNetCore.Authentication;
 using Csms.Application;
 using Csms.Infrastructure;
+using Csms.Infrastructure.Documents;
 using Csms.Infrastructure.Npa;
 using Microsoft.EntityFrameworkCore;
 
@@ -179,6 +180,21 @@ builder.Services.AddSingleton<NpaLlmAnalyzer>();
 builder.Services.AddSingleton<NpaSyncService>();
 builder.Services.AddHostedService<NpaSyncWorker>();
 
+// Агент извлечения функций: настройки отдельные, чтобы не зависить от
+// Npa:Llm:Enabled. Модель та же, локальная, но вызывается только по запросу.
+var documentFunctionsOptions = new DocumentFunctionsOptions();
+builder.Configuration.GetSection(DocumentFunctionsOptions.SectionName)
+    .Bind(documentFunctionsOptions);
+documentFunctionsOptions.Validate();
+builder.Services.AddSingleton(documentFunctionsOptions);
+builder.Services.AddSingleton<IDocumentFunctionStore, InMemoryDocumentFunctionStore>();
+builder.Services.AddSingleton<DocumentSegmenter>();
+builder.Services.AddSingleton<DocumentTextExtractor>();
+builder.Services.AddSingleton<DocumentFunctionExtractor>();
+builder.Services.AddSingleton<DocumentFunctionValidator>();
+builder.Services.AddSingleton<DocumentFunctionReducer>();
+builder.Services.AddSingleton<DocumentExtractionService>();
+
 var app = builder.Build();
 
 app.UseExceptionHandler();
@@ -194,6 +210,7 @@ app.MapEisPackageEndpoints();
 app.MapEisSchemaEndpoints();
 app.MapReferenceDataEndpoints();
 app.MapNpaEndpoints();
+app.MapDocumentFunctionEndpoints();
 app.MapAccessEndpoints();
 
 app.Run();
