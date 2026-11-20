@@ -55,6 +55,7 @@ if (store == "postgres")
 
     builder.Services.AddDbContextFactory<EisDbContext>(options => options.UseNpgsql(connectionString));
     builder.Services.AddSingleton<IEisPackageRepository, EfCoreEisPackageRepository>();
+    builder.Services.AddSingleton<IContractChangeRepository, EfCoreContractChangeRepository>();
     builder.Services.AddSingleton<IReferenceDataStore, EfCoreReferenceDataStore>();
     builder.Services.AddSingleton<IAccessStore, EfCoreAccessStore>();
     builder.Services.AddSingleton<INpaRuleStore, EfCoreNpaRuleStore>();
@@ -64,6 +65,7 @@ if (store == "postgres")
 else
 {
     builder.Services.AddSingleton<IEisPackageRepository, InMemoryEisPackageRepository>();
+    builder.Services.AddSingleton<IContractChangeRepository, InMemoryContractChangeRepository>();
     builder.Services.AddSingleton<IReferenceDataStore, InMemoryReferenceDataStore>();
     builder.Services.AddSingleton<IAccessStore, InMemoryAccessStore>();
     builder.Services.AddSingleton<INpaRuleStore, InMemoryNpaRuleStore>();
@@ -144,6 +146,7 @@ builder.Services.AddSingleton<EisNsiTreeImporter>(provider => new EisNsiTreeImpo
 
 builder.Services.AddSingleton<IEisTransport, MockEisTransport>();
 builder.Services.AddSingleton<EisPackageService>();
+builder.Services.AddSingleton<ContractChangeService>();
 builder.Services.AddSingleton<AccessService>();
 
 // Агент разметки НПА: официальный текст акта → правила по кодам ОКПД2.
@@ -237,6 +240,7 @@ app.MapNpaEndpoints();
 app.MapDocumentFunctionEndpoints();
 app.MapOrder158nPoolEndpoints();
 app.MapLiabilityMappingEndpoints();
+app.MapContractChangeEndpoints();
 app.MapAccessEndpoints();
 
 app.Run();
