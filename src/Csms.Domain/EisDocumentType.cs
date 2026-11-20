@@ -8,4 +8,10 @@ public enum EisDocumentType
 
     /// <summary>Сведения об исполнении контракта.</summary>
     ContractExecution = 1,
+
+    /// <summary>Извещение о закупке (XML собирает фронтенд CSMS).</summary>
+    Notification = 2,
+
+    /// <summary>Проект контракта (XML собирает фронтенд CSMS).</summary>
+    ContractProject = 3,
 }

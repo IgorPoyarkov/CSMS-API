@@ -4,10 +4,15 @@ using Csms.Domain;
 namespace Csms.Api;
 
 /// <summary>Тело запроса на создание пакета.</summary>
+/// <remarks>
+/// <c>PayloadXml</c> необязателен: для извещения и проекта контракта фронт
+/// присылает готовый XML, для остальных типов шлюз собирает заглушку.
+/// </remarks>
 public sealed record CreatePackageRequest(
     EisDocumentType DocumentType,
     string? ContractEisNumber,
-    string? Ikz);
+    string? Ikz,
+    string? PayloadXml = null);
 
 /// <summary>Подпись, полученная плагином на рабочем месте заказчика.</summary>
 public sealed record AttachSignatureRequest(

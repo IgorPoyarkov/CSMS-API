@@ -98,7 +98,12 @@ public sealed class EisPackage
     {
         var number = EisRegistryNumber.Normalize(contractEisNumber);
 
-        if (!EisRegistryNumber.IsValid(number))
+        // Извещение и проект контракта живут до заключения контракта, поэтому
+        // реестрового номера у них ещё нет: для этих типов он не требуется.
+        var requiresContractNumber = documentType is
+            EisDocumentType.SmpAttraction or EisDocumentType.ContractExecution;
+
+        if (requiresContractNumber && !EisRegistryNumber.IsValid(number))
         {
             throw new DomainException(
                 $"Реестровый номер контракта в ЕИС должен содержать {EisRegistryNumber.Length} цифр, " +

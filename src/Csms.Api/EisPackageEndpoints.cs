@@ -43,7 +43,8 @@ public static class EisPackageEndpoints
             var command = new CreatePackageCommand(
                 request.DocumentType,
                 request.ContractEisNumber,
-                request.Ikz);
+                request.Ikz,
+                request.PayloadXml);
 
             var package = await service.CreateAsync(command, cancellationToken);
 

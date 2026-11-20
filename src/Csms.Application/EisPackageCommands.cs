@@ -3,10 +3,17 @@ using Csms.Domain;
 namespace Csms.Application;
 
 /// <summary>Запрос на создание пакета.</summary>
+/// <remarks>
+/// <c>PayloadXml</c> — готовый XML документа CSMS (извещение или проект
+/// контракта). Если он передан, шлюз не собирает заглушку, а подписывает и
+/// отправляет этот документ. Для сведений СМП и исполнения контракта
+/// остаётся <c>null</c> — их собирает <c>IEisDocumentXmlBuilder</c>.
+/// </remarks>
 public sealed record CreatePackageCommand(
     EisDocumentType DocumentType,
     string? ContractEisNumber,
-    string? Ikz);
+    string? Ikz,
+    string? PayloadXml = null);
 
 /// <summary>Подпись, полученная на рабочем месте заказчика.</summary>
 public sealed record AttachSignatureCommand(

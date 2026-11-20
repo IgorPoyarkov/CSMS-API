@@ -33,10 +33,17 @@ public sealed class EisPackageService(
     {
         // Номер проверяется дважды: здесь — чтобы не собирать XML зря,
         // в домене — чтобы правило нельзя было обойти другим вызывающим кодом
-        var built = xmlBuilder.Build(
-            command.DocumentType,
-            EisRegistryNumber.Normalize(command.ContractEisNumber),
-            (command.Ikz ?? string.Empty).Trim());
+        var normalizedNumber = EisRegistryNumber.Normalize(command.ContractEisNumber);
+        var payloadXml = command.PayloadXml?.Trim();
+
+        // Готовый XML извещения или проекта контракта приходит с фронта:
+        // его нельзя пересобирать заглушкой, иначе уйдёт не тот документ
+        var built = string.IsNullOrEmpty(payloadXml)
+            ? xmlBuilder.Build(
+                command.DocumentType,
+                normalizedNumber,
+                (command.Ikz ?? string.Empty).Trim())
+            : new XmlBuildResult(payloadXml, "17.0");
 
         EnsureXsdValid(built);
 
