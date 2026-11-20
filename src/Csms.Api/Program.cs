@@ -151,6 +151,12 @@ builder.Services.AddSingleton<EisNsiTreeImporter>(provider => new EisNsiTreeImpo
 
 builder.Services.AddSingleton<IEisTransport, MockEisTransport>();
 builder.Services.AddSingleton<EisPackageService>();
+
+// Маппер приёмки (Б7) и сборка пакета по нему не хранят состояние и
+// переиспользуют тот же экземпляр каталога XSD, что и остальные проверки.
+builder.Services.AddSingleton<AcceptanceXmlMapper>();
+builder.Services.AddSingleton<AcceptanceEisPackageBuilder>();
+
 builder.Services.AddSingleton<ContractChangeService>();
 builder.Services.AddSingleton<AcceptanceService>();
 builder.Services.AddSingleton<AccessService>();
@@ -249,6 +255,7 @@ app.MapLiabilityMappingEndpoints();
 app.MapPp2604Endpoints();
 app.MapContractChangeEndpoints();
 app.MapAcceptanceEndpoints();
+app.MapAcceptanceEisPackageEndpoints();
 app.MapAccessEndpoints();
 
 app.Run();
