@@ -1,4 +1,21 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace Csms.Application;
+
+/// <summary>
+/// Перечисления в API сериализуются строчными именами, как в контракте
+/// (full/partial/blanket/irrelevant), даже если глобальный конвертер
+/// ASP.NET использует PascalCase.
+/// </summary>
+public sealed class LowerCaseEnumConverter<TEnum> : JsonStringEnumConverter<TEnum>
+    where TEnum : struct, Enum
+{
+    public LowerCaseEnumConverter()
+        : base(JsonNamingPolicy.CamelCase)
+    {
+    }
+}
 
 /// <summary>Идентификаторы обязанности из Сущности А.</summary>
 public sealed record DutyIdentifiers(
@@ -20,6 +37,7 @@ public sealed record DutyInput(
     string LiabilityActCode);
 
 /// <summary>Вид гипотезы нарушения после семантической инверсии обязанности.</summary>
+[JsonConverter(typeof(LowerCaseEnumConverter<ViolationKind>))]
 public enum ViolationKind
 {
     Omission,
@@ -30,10 +48,12 @@ public enum ViolationKind
 
 /// <summary>Гипотеза возможного нарушения, построенная из позитивной обязанности.</summary>
 public sealed record ViolationHypothesis(
-    string Id,
+    [property: JsonPropertyName("id")] string Id,
+    [property: JsonPropertyName("kind")]
+    [property: JsonConverter(typeof(LowerCaseEnumConverter<ViolationKind>))]
     ViolationKind Kind,
-    string Text,
-    string DutyId);
+    [property: JsonPropertyName("text")] string Text,
+    [property: JsonPropertyName("duty_id")] string DutyId);
 
 /// <summary>Тип нормы ответственности: специальная, общая, бланкетная и т.д.</summary>
 public enum LiabilityNormType
@@ -73,6 +93,7 @@ public sealed record LiabilityCandidate(
     string? ChunkId = null);
 
 /// <summary>Степень совпадения: факт соответствия состава, а не условия ответственности.</summary>
+[JsonConverter(typeof(LowerCaseEnumConverter<MatchDegree>))]
 public enum MatchDegree
 {
     Full,
@@ -83,26 +104,28 @@ public enum MatchDegree
 
 /// <summary>Итоговая связь обязанности с одной нормой ответственности.</summary>
 public sealed record MatchedLiability(
-    string LiabilityNodeId,
-    string NormReference,
+    [property: JsonPropertyName("liability_node_id")] string LiabilityNodeId,
+    [property: JsonPropertyName("norm_reference")] string NormReference,
+    [property: JsonPropertyName("match_degree")]
+    [property: JsonConverter(typeof(LowerCaseEnumConverter<MatchDegree>))]
     MatchDegree MatchDegree,
-    double ProbabilityScore,
-    IReadOnlyList<string> QualifyingConditions,
-    string SanctionSummary,
-    string LegalReasoning,
-    bool RequiresHumanReview);
+    [property: JsonPropertyName("probability_score")] double ProbabilityScore,
+    [property: JsonPropertyName("qualifying_conditions")] IReadOnlyList<string> QualifyingConditions,
+    [property: JsonPropertyName("sanction_summary")] string SanctionSummary,
+    [property: JsonPropertyName("legal_reasoning")] string LegalReasoning,
+    [property: JsonPropertyName("requires_human_review")] bool RequiresHumanReview);
 
 /// <summary>Результат сопоставления одной обязанности со многими нормами.</summary>
 public sealed record LiabilityMappingResult(
-    string DutyId,
-    Guid RunId,
-    IReadOnlyList<ViolationHypothesis> Hypotheses,
-    IReadOnlyList<MatchedLiability> MatchedNorms,
-    int CandidateCount,
-    string ModelVersion,
-    string PromptVersion,
-    DateTimeOffset CalculatedAt,
-    bool RequiresHumanReview);
+    [property: JsonPropertyName("duty_id")] string DutyId,
+    [property: JsonPropertyName("run_id")] Guid RunId,
+    [property: JsonPropertyName("violation_hypotheses")] IReadOnlyList<ViolationHypothesis> Hypotheses,
+    [property: JsonPropertyName("matched_liabilities")] IReadOnlyList<MatchedLiability> MatchedNorms,
+    [property: JsonPropertyName("candidate_count")] int CandidateCount,
+    [property: JsonPropertyName("model_version")] string ModelVersion,
+    [property: JsonPropertyName("prompt_version")] string PromptVersion,
+    [property: JsonPropertyName("calculated_at")] DateTimeOffset CalculatedAt,
+    [property: JsonPropertyName("requires_human_review")] bool RequiresHumanReview);
 
 /// <summary>Одна оценка нормы в строгом JSON-ответе арбитра.</summary>
 public sealed record LlmArbiterItem(

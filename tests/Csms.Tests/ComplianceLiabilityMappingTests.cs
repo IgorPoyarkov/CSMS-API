@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Csms.Application;
 using Csms.Infrastructure.Liability;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -299,6 +300,44 @@ public sealed class ComplianceLiabilityMappingTests
         Assert.Equal(first, second);
         Assert.NotEqual(first, otherModel);
         Assert.NotEqual(first, otherPool);
+    }
+
+    [Fact]
+    public void Результат_сериализуется_в_оговорённый_контракт_API()
+    {
+        var result = new LiabilityMappingResult(
+            "duty-1",
+            Guid.NewGuid(),
+            CreateHypotheses(),
+            [
+                new MatchedLiability(
+                    "n1", "ст. 15", MatchDegree.Full, 0.9,
+                    [], "штраф", "Обоснование", false),
+            ],
+            1, "model-v1", LiabilityMappingRules.PromptVersion,
+            DateTimeOffset.UtcNow, false);
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.Converters.Add(new JsonStringEnumConverter());
+
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(result, options));
+        var root = document.RootElement;
+
+        Assert.True(root.TryGetProperty("duty_id", out _));
+        Assert.True(root.TryGetProperty("violation_hypotheses", out var hypotheses));
+        Assert.NotEmpty(hypotheses.EnumerateArray());
+        Assert.True(root.TryGetProperty("matched_liabilities", out var matched));
+        var item = Assert.Single(matched.EnumerateArray());
+        foreach (var name in new[]
+                 {
+                     "liability_node_id", "norm_reference", "match_degree",
+                     "probability_score", "qualifying_conditions", "sanction_summary",
+                     "legal_reasoning", "requires_human_review",
+                 })
+        {
+            Assert.True(item.TryGetProperty(name, out _), name);
+        }
+
+        Assert.Equal("full", item.GetProperty("match_degree").GetString());
     }
 
     private static DutyInput CreateDuty() => new(
