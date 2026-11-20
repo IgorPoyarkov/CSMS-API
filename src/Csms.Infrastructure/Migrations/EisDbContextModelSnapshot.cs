@@ -23,6 +23,142 @@ namespace Csms.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Csms.Infrastructure.AcceptanceDefectRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcceptanceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int>("OrderIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("PositionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<string>("Requirement")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcceptanceId", "OrderIndex");
+
+                    b.ToTable("acceptance_defects", "contract");
+                });
+
+            modelBuilder.Entity("Csms.Infrastructure.AcceptanceEventRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcceptanceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Comment")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("From")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("OrderIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("To")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcceptanceId", "OrderIndex");
+
+                    b.ToTable("acceptance_events", "contract");
+                });
+
+            modelBuilder.Entity("Csms.Infrastructure.AcceptancePositionRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcceptanceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CountryOrigin")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("Okpd2")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("OrderIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<string>("RegistryNumber")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("VatRate")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcceptanceId", "OrderIndex");
+
+                    b.ToTable("acceptance_positions", "contract");
+                });
+
             modelBuilder.Entity("Csms.Infrastructure.AccessContractServiceRow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -339,6 +475,212 @@ namespace Csms.Infrastructure.Migrations
                     b.ToTable("users", "access");
                 });
 
+            modelBuilder.Entity("Csms.Infrastructure.ContractAcceptanceRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AcceptanceTermDays")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CancelledReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateOnly?>("CommissionDecisionDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("CommissionDecisionNumber")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("CommissionRequired")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateOnly?>("ContractDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("ContractId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ContractName")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("ContractNumber")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<decimal>("ContractPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("ContractStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateOnly?>("CorrectedDocumentDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("CorrectedDocumentNumber")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("CorrectionReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("CustomerName")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("DeliveryPlace")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateOnly?>("DocumentDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("DocumentNumber")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateOnly?>("EisRegistrationDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("EisRegistrationNumber")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("EisRegistryNumber")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<bool>("ExpertiseByThirdParty")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateOnly?>("ExpertiseConclusionDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("ExpertiseConclusionNumber")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ExpertiseOrganization")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<bool>("ExpertiseRequired")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Ikz")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("OrganizationId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("RefusalReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset?>("RegisteredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RegisteredBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Result")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ReturnComment")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("SignedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SignedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("StageName")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<int?>("StageNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset?>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SupplierInn")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("SupplierName")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<uint>("Xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContractId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("OrganizationId", "ContractId");
+
+                    b.ToTable("contract_acceptances", "contract");
+                });
+
             modelBuilder.Entity("Csms.Infrastructure.ContractChangeDocumentRow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -600,7 +942,8 @@ namespace Csms.Infrastructure.Migrations
                         .HasColumnType("character varying(2000)");
 
                     b.Property<int>("Revision")
-                        .IsConcurrencyToken();
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
 
                     b.Property<DateTimeOffset?>("SignedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1001,6 +1344,33 @@ namespace Csms.Infrastructure.Migrations
                     b.ToTable("items", "ref");
                 });
 
+            modelBuilder.Entity("Csms.Infrastructure.AcceptanceDefectRow", b =>
+                {
+                    b.HasOne("Csms.Infrastructure.ContractAcceptanceRow", null)
+                        .WithMany("Defects")
+                        .HasForeignKey("AcceptanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Csms.Infrastructure.AcceptanceEventRow", b =>
+                {
+                    b.HasOne("Csms.Infrastructure.ContractAcceptanceRow", null)
+                        .WithMany("Events")
+                        .HasForeignKey("AcceptanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Csms.Infrastructure.AcceptancePositionRow", b =>
+                {
+                    b.HasOne("Csms.Infrastructure.ContractAcceptanceRow", null)
+                        .WithMany("Positions")
+                        .HasForeignKey("AcceptanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Csms.Infrastructure.ContractChangeDocumentRow", b =>
                 {
                     b.HasOne("Csms.Infrastructure.ContractChangeRow", null)
@@ -1039,6 +1409,15 @@ namespace Csms.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Dataset");
+                });
+
+            modelBuilder.Entity("Csms.Infrastructure.ContractAcceptanceRow", b =>
+                {
+                    b.Navigation("Defects");
+
+                    b.Navigation("Events");
+
+                    b.Navigation("Positions");
                 });
 
             modelBuilder.Entity("Csms.Infrastructure.ContractChangeRow", b =>

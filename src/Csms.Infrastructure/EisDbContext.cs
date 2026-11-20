@@ -48,6 +48,14 @@ public sealed class EisDbContext(DbContextOptions<EisDbContext> options) : DbCon
     public DbSet<ContractChangeDocumentRow> ContractChangeDocuments => Set<ContractChangeDocumentRow>();
     public DbSet<ContractChangeEventRow> ContractChangeEvents => Set<ContractChangeEventRow>();
 
+    // Электронное актирование: документы о приёмке, их позиции, недостатки и
+    // журнал переходов. Та же схема, что у изменений контракта: это документы
+    // исполнения, а не пакеты обмена с ЕИС.
+    public DbSet<ContractAcceptanceRow> ContractAcceptances => Set<ContractAcceptanceRow>();
+    public DbSet<AcceptancePositionRow> AcceptancePositions => Set<AcceptancePositionRow>();
+    public DbSet<AcceptanceDefectRow> AcceptanceDefects => Set<AcceptanceDefectRow>();
+    public DbSet<AcceptanceEventRow> AcceptanceEvents => Set<AcceptanceEventRow>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         builder.HasDefaultSchema("eis");
@@ -141,6 +149,7 @@ public sealed class EisDbContext(DbContextOptions<EisDbContext> options) : DbCon
         ConfigureAccess(builder);
         ConfigureNpa(builder);
         ConfigureContractChanges(builder);
+        ConfigureAcceptances(builder);
     }
 
     /// <summary>
@@ -423,6 +432,129 @@ public sealed class EisDbContext(DbContextOptions<EisDbContext> options) : DbCon
             entity.Property(row => row.UserKey).HasMaxLength(64).IsRequired();
             entity.HasIndex(row => row.UserKey);
             entity.HasIndex(row => row.ExpiresAt);
+        });
+    }
+
+    /// <summary>
+    /// Документы о приёмке (электронное актирование, ст. 94 44-ФЗ): снимок
+    /// контракта и условий приёмки, позиции, недостатки и журнал переходов.
+    ///
+    /// Снимок хранится вместе с документом, а не подтягивается из json-server:
+    /// приёмку нельзя пересчитать задним числом по изменённой карточке.
+    /// </summary>
+    private static void ConfigureAcceptances(ModelBuilder builder)
+    {
+        builder.Entity<ContractAcceptanceRow>(entity =>
+        {
+            entity.ToTable("contract_acceptances", "contract");
+            entity.HasKey(row => row.Id);
+
+            entity.Property(row => row.OrganizationId).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.ContractId).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.ContractNumber).HasMaxLength(128).IsRequired();
+            entity.Property(row => row.ContractName).HasMaxLength(2000).IsRequired();
+            entity.Property(row => row.ContractPrice).HasPrecision(18, 2);
+            entity.Property(row => row.ContractStatus).HasMaxLength(32).IsRequired();
+            entity.Property(row => row.CustomerName).HasMaxLength(512);
+            entity.Property(row => row.SupplierName).HasMaxLength(512);
+            entity.Property(row => row.SupplierInn).HasMaxLength(16);
+            entity.Property(row => row.Ikz).HasMaxLength(64);
+            entity.Property(row => row.EisRegistryNumber).HasMaxLength(32);
+            entity.Property(row => row.StageName).HasMaxLength(512);
+
+            entity.Property(row => row.Kind).HasMaxLength(32).IsRequired();
+            entity.Property(row => row.DocumentNumber).HasMaxLength(64);
+            entity.Property(row => row.CorrectedDocumentNumber).HasMaxLength(64);
+            entity.Property(row => row.CorrectionReason).HasMaxLength(2000);
+
+            entity.Property(row => row.ExpertiseOrganization).HasMaxLength(512);
+            entity.Property(row => row.ExpertiseConclusionNumber).HasMaxLength(64);
+            entity.Property(row => row.CommissionDecisionNumber).HasMaxLength(64);
+            entity.Property(row => row.DeliveryPlace).HasMaxLength(512);
+            entity.Property(row => row.Notes).HasMaxLength(4000);
+            entity.Property(row => row.CreatedBy).HasMaxLength(256).IsRequired();
+
+            entity.Property(row => row.Status).HasMaxLength(32).IsRequired();
+            entity.Property(row => row.Result).HasMaxLength(32);
+            entity.Property(row => row.SignedBy).HasMaxLength(256);
+            entity.Property(row => row.RegisteredBy).HasMaxLength(256);
+            entity.Property(row => row.EisRegistrationNumber).HasMaxLength(64);
+            entity.Property(row => row.RefusalReason).HasMaxLength(2000);
+            entity.Property(row => row.ReturnComment).HasMaxLength(2000);
+            entity.Property(row => row.CancelledReason).HasMaxLength(2000);
+
+            // Ревизия записи — рабочий токен блокировки: её значение известно
+            // документу с момента чтения, поэтому устаревшая правка получает
+            // конфликт, а не перезаписывает чужую.
+            entity.Property(row => row.Revision).IsConcurrencyToken();
+
+            // xmin остаётся дополнительной защитой на уровне PostgreSQL.
+            entity.Property(row => row.Xmin)
+                .ValueGeneratedOnAddOrUpdate()
+                .HasColumnName("xmin");
+            entity.Property(row => row.Xmin).IsConcurrencyToken();
+
+            entity.HasIndex(row => new { row.OrganizationId, row.ContractId });
+            entity.HasIndex(row => row.ContractId);
+            entity.HasIndex(row => row.Status);
+
+            entity.HasMany(row => row.Positions)
+                .WithOne()
+                .HasForeignKey(position => position.AcceptanceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(row => row.Defects)
+                .WithOne()
+                .HasForeignKey(defect => defect.AcceptanceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(row => row.Events)
+                .WithOne()
+                .HasForeignKey(item => item.AcceptanceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<AcceptancePositionRow>(entity =>
+        {
+            entity.ToTable("acceptance_positions", "contract");
+            entity.HasKey(row => row.Id);
+
+            entity.Property(row => row.Name).HasMaxLength(2000).IsRequired();
+            entity.Property(row => row.Okpd2).HasMaxLength(32);
+            entity.Property(row => row.Unit).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.Quantity).HasPrecision(18, 3);
+            entity.Property(row => row.UnitPrice).HasPrecision(18, 2);
+            entity.Property(row => row.VatRate).HasPrecision(5, 2);
+            entity.Property(row => row.CountryOrigin).HasMaxLength(128);
+            entity.Property(row => row.RegistryNumber).HasMaxLength(64);
+
+            entity.HasIndex(row => new { row.AcceptanceId, row.OrderIndex });
+        });
+
+        builder.Entity<AcceptanceDefectRow>(entity =>
+        {
+            entity.ToTable("acceptance_defects", "contract");
+            entity.HasKey(row => row.Id);
+
+            entity.Property(row => row.Description).HasMaxLength(2000).IsRequired();
+            entity.Property(row => row.Quantity).HasPrecision(18, 3);
+            entity.Property(row => row.Requirement).HasMaxLength(32).IsRequired();
+
+            entity.HasIndex(row => new { row.AcceptanceId, row.OrderIndex });
+        });
+
+        builder.Entity<AcceptanceEventRow>(entity =>
+        {
+            entity.ToTable("acceptance_events", "contract");
+            entity.HasKey(row => row.Id);
+
+            entity.Property(row => row.From).HasMaxLength(32).IsRequired();
+            entity.Property(row => row.To).HasMaxLength(32).IsRequired();
+            entity.Property(row => row.Action).HasMaxLength(128).IsRequired();
+            entity.Property(row => row.Comment).HasMaxLength(2000).IsRequired();
+            entity.Property(row => row.Actor).HasMaxLength(256).IsRequired();
+
+            entity.HasIndex(row => new { row.AcceptanceId, row.OrderIndex });
         });
     }
 }
