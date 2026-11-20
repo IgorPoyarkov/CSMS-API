@@ -328,6 +328,9 @@ Validate, Reduce, in-memory store), оркестратор `DocumentExtractionSe
   Validate → Reduce → проверка человеком (реализован, см. §6); первый целевой
   документ — Приказ № 158н;
 - `docs/eis-nsi-soap.md` — шаблон запроса `getNsiRequest` и разбор архивов НСИ;
+- `docs/tasks/contract-smp.md` — серверная часть привлечения СМП/СОНКО:
+  `/api/contract-smp-records`, машина состояний, правила 44-ФЗ/№ 1466,
+  таблицы `contract.contract_smp_*` (2026-11-20);
 - `docs/eis-open-questions.md` — открытые вопросы по обмену с ЕИС.
 
 ## Быстрые точки входа

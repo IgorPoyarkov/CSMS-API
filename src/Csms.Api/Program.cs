@@ -57,6 +57,7 @@ if (store == "postgres")
     builder.Services.AddDbContextFactory<EisDbContext>(options => options.UseNpgsql(connectionString));
     builder.Services.AddSingleton<IEisPackageRepository, EfCoreEisPackageRepository>();
     builder.Services.AddSingleton<IContractChangeRepository, EfCoreContractChangeRepository>();
+    builder.Services.AddSingleton<IContractSmpRecordRepository, EfCoreContractSmpRecordRepository>();
     builder.Services.AddSingleton<IReferenceDataStore, EfCoreReferenceDataStore>();
     builder.Services.AddSingleton<IAccessStore, EfCoreAccessStore>();
     builder.Services.AddSingleton<INpaRuleStore, EfCoreNpaRuleStore>();
@@ -68,6 +69,7 @@ else
 {
     builder.Services.AddSingleton<IEisPackageRepository, InMemoryEisPackageRepository>();
     builder.Services.AddSingleton<IContractChangeRepository, InMemoryContractChangeRepository>();
+    builder.Services.AddSingleton<IContractSmpRecordRepository, InMemoryContractSmpRecordRepository>();
     builder.Services.AddSingleton<IReferenceDataStore, InMemoryReferenceDataStore>();
     builder.Services.AddSingleton<IAccessStore, InMemoryAccessStore>();
     builder.Services.AddSingleton<INpaRuleStore, InMemoryNpaRuleStore>();
@@ -150,6 +152,7 @@ builder.Services.AddSingleton<EisNsiTreeImporter>(provider => new EisNsiTreeImpo
 builder.Services.AddSingleton<IEisTransport, MockEisTransport>();
 builder.Services.AddSingleton<EisPackageService>();
 builder.Services.AddSingleton<ContractChangeService>();
+builder.Services.AddSingleton<ContractSmpRecordService>();
 builder.Services.AddSingleton<AccessService>();
 
 // Агент разметки НПА: официальный текст акта → правила по кодам ОКПД2.
@@ -245,6 +248,7 @@ app.MapOrder158nPoolEndpoints();
 app.MapLiabilityMappingEndpoints();
 app.MapPp2604Endpoints();
 app.MapContractChangeEndpoints();
+app.MapContractSmpRecordEndpoints();
 app.MapAccessEndpoints();
 
 app.Run();

@@ -48,6 +48,12 @@ public sealed class EisDbContext(DbContextOptions<EisDbContext> options) : DbCon
     public DbSet<ContractChangeDocumentRow> ContractChangeDocuments => Set<ContractChangeDocumentRow>();
     public DbSet<ContractChangeEventRow> ContractChangeEvents => Set<ContractChangeEventRow>();
 
+    // Сведения о привлечении СМП/СОНКО: своя таблица и журнал, как у изменений
+    // контракта. Запись должна читаться после изменения карточки контракта.
+    public DbSet<ContractSmpRecordRow> ContractSmpRecords => Set<ContractSmpRecordRow>();
+    public DbSet<ContractSmpDocumentRow> ContractSmpDocuments => Set<ContractSmpDocumentRow>();
+    public DbSet<ContractSmpEventRow> ContractSmpEvents => Set<ContractSmpEventRow>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         builder.HasDefaultSchema("eis");
@@ -141,6 +147,7 @@ public sealed class EisDbContext(DbContextOptions<EisDbContext> options) : DbCon
         ConfigureAccess(builder);
         ConfigureNpa(builder);
         ConfigureContractChanges(builder);
+        ConfigureContractSmpRecords(builder);
     }
 
     /// <summary>
@@ -246,6 +253,106 @@ public sealed class EisDbContext(DbContextOptions<EisDbContext> options) : DbCon
             entity.Property(row => row.Actor).HasMaxLength(256).IsRequired();
 
             entity.HasIndex(row => new { row.ChangeId, row.OrderIndex });
+        });
+    }
+
+    /// <summary>
+    /// Сведения о привлечении СМП/СОНКО (ч. 5-6 ст. 30 44-ФЗ, ПП РФ № 1466):
+    /// реквизиты договора с субподрядчиком, подтверждения, статус и журнал.
+    /// Снимок контракта лежит рядом с записью — как у изменений контракта.
+    /// </summary>
+    private static void ConfigureContractSmpRecords(ModelBuilder builder)
+    {
+        builder.Entity<ContractSmpRecordRow>(entity =>
+        {
+            entity.ToTable("contract_smp_records", "contract");
+            entity.HasKey(row => row.Id);
+
+            entity.Property(row => row.OrganizationId).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.ContractId).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.ContractNumber).HasMaxLength(128).IsRequired();
+            entity.Property(row => row.ContractName).HasMaxLength(2000).IsRequired();
+            entity.Property(row => row.ContractPrice).HasPrecision(18, 2);
+            entity.Property(row => row.RequiredPercent).HasPrecision(5, 2);
+            entity.Property(row => row.EisRegistryNumber).HasMaxLength(32);
+
+            entity.Property(row => row.DocumentType).HasMaxLength(32).IsRequired();
+            entity.Property(row => row.DocumentNumber).HasMaxLength(100).IsRequired();
+            entity.Property(row => row.Amount).HasPrecision(18, 2);
+            entity.Property(row => row.Okpd2Code).HasMaxLength(64);
+            entity.Property(row => row.PriceType).HasMaxLength(32).IsRequired();
+            entity.Property(row => row.UnitPrice).HasPrecision(18, 2);
+            entity.Property(row => row.Subject).HasMaxLength(500);
+            entity.Property(row => row.Period).HasMaxLength(100);
+
+            entity.Property(row => row.SupplierName).HasMaxLength(512).IsRequired();
+            entity.Property(row => row.SupplierInn).HasMaxLength(12);
+            entity.Property(row => row.SupplierKpp).HasMaxLength(9);
+            entity.Property(row => row.SubContractRecordId).HasMaxLength(64);
+            entity.Property(row => row.SourceFileName).HasMaxLength(255);
+
+            entity.Property(row => row.SupplierConfirmedBy).HasMaxLength(256);
+            entity.Property(row => row.SupplierConfirmedDocument).HasMaxLength(300);
+            entity.Property(row => row.CustomerConfirmedBy).HasMaxLength(256);
+            entity.Property(row => row.CustomerConfirmedDocument).HasMaxLength(300);
+            entity.Property(row => row.Comment).HasMaxLength(1000);
+            entity.Property(row => row.CreatedBy).HasMaxLength(256).IsRequired();
+
+            entity.Property(row => row.Status).HasMaxLength(32).IsRequired();
+            entity.Property(row => row.AcceptedBy).HasMaxLength(256);
+            entity.Property(row => row.RejectedReason).HasMaxLength(1000);
+            entity.Property(row => row.PushedBy).HasMaxLength(256);
+            entity.Property(row => row.EisRecordNumber).HasMaxLength(100);
+
+            entity.Property(row => row.Revision).IsConcurrencyToken();
+            entity.Property(row => row.Xmin)
+                .ValueGeneratedOnAddOrUpdate()
+                .HasColumnName("xmin");
+            entity.Property(row => row.Xmin).IsConcurrencyToken();
+
+            entity.HasIndex(row => new { row.OrganizationId, row.ContractId });
+            entity.HasIndex(row => row.ContractId);
+            entity.HasIndex(row => row.Status);
+            entity.HasIndex(row => row.DocumentType);
+            entity.HasIndex(row => row.SupplierInn);
+
+            entity.HasMany(row => row.Documents)
+                .WithOne()
+                .HasForeignKey(document => document.RecordId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(row => row.Events)
+                .WithOne()
+                .HasForeignKey(item => item.RecordId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<ContractSmpDocumentRow>(entity =>
+        {
+            entity.ToTable("contract_smp_record_documents", "contract");
+            entity.HasKey(row => row.Id);
+
+            entity.Property(row => row.Type).HasMaxLength(32).IsRequired();
+            entity.Property(row => row.Title).HasMaxLength(512).IsRequired();
+            entity.Property(row => row.Content).IsRequired();
+            entity.Property(row => row.Sha256).HasMaxLength(64).IsRequired();
+            entity.Property(row => row.CreatedBy).HasMaxLength(256).IsRequired();
+
+            entity.HasIndex(row => new { row.RecordId, row.OrderIndex });
+        });
+
+        builder.Entity<ContractSmpEventRow>(entity =>
+        {
+            entity.ToTable("contract_smp_record_events", "contract");
+            entity.HasKey(row => row.Id);
+
+            entity.Property(row => row.From).HasMaxLength(32).IsRequired();
+            entity.Property(row => row.To).HasMaxLength(32).IsRequired();
+            entity.Property(row => row.Action).HasMaxLength(128).IsRequired();
+            entity.Property(row => row.Comment).HasMaxLength(1000).IsRequired();
+            entity.Property(row => row.Actor).HasMaxLength(256).IsRequired();
+
+            entity.HasIndex(row => new { row.RecordId, row.OrderIndex });
         });
     }
 
