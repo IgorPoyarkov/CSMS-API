@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Csms.Application;
 using Csms.Infrastructure;
 using Csms.Infrastructure.Npa;
@@ -24,6 +25,12 @@ public static class NpaEndpoints
             timeZone = "UTC+3 (Москва)",
             autoPromote = options.AutoPromote,
             minAutoConfidence = options.MinAutoConfidence,
+            llm = new
+            {
+                enabled = options.Llm.Enabled,
+                endpoint = options.Llm.Endpoint,
+                model = options.Llm.Model,
+            },
             documents = options.Documents.Select(document => new
             {
                 code = document.Code,
@@ -97,6 +104,56 @@ public static class NpaEndpoints
         .Produces<NpaEffectiveRule>()
         .ProducesProblem(StatusCodes.Status404NotFound)
         .WithSummary("Действующее правило для кода ОКПД2 (ближайший предок)");
+
+        // Второй агент: разбор спорных строк локальной моделью. Ничего не
+        // публикует — предложения возвращаются человеку и попадают в правила
+        // только после /verify или при следующей синхронизации с Npa:Llm:Enabled.
+        group.MapPost("/documents/{code}/analyze", async (
+            string code,
+            NpaOptions options,
+            INpaRuleStore store,
+            IReferenceDataStore references,
+            NpaLlmAnalyzer analyzer,
+            CancellationToken cancellationToken) =>
+        {
+            if (!options.Llm.Enabled)
+            {
+                return Results.BadRequest(new
+                {
+                    error = "LLM-аналитик выключен (Npa:Llm:Enabled=false).",
+                });
+            }
+
+            var active = await store.GetActiveAsync(code, cancellationToken);
+            if (active is null)
+            {
+                return Results.NotFound();
+            }
+
+            if (string.IsNullOrWhiteSpace(active.UnresolvedJson))
+            {
+                return Results.Ok(new NpaLlmAnalysisResult(code, options.Llm.Model, 0, 0, 0, [], null));
+            }
+
+            var rows = JsonSerializer.Deserialize<List<NpaUnresolvedRow>>(
+                           active.UnresolvedJson,
+                           new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? [];
+            var items = await references.GetAllAsync("nsiOKPD2", cancellationToken);
+            var catalog = Okpd2Catalog.FromItems(items);
+            var request = NpaLlmRuleAdapter.BuildRequest(
+                code,
+                active.Title,
+                active.Number,
+                rows,
+                catalog,
+                options.Llm.MaxCandidates);
+
+            return Results.Ok(await analyzer.AnalyzeAsync(request, cancellationToken));
+        })
+        .Produces<NpaLlmAnalysisResult>()
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status404NotFound)
+        .WithSummary("Разобрать спорные строки акта локальной моделью (без публикации)");
 
         group.MapPost("/documents/{code}/sync", async (
             string code,

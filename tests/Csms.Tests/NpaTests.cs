@@ -347,6 +347,116 @@ public sealed class NpaTests
         Assert.Equal("26.60", Assert.Single(result.Exclusions).Code);
     }
 
+    [Fact]
+    public void LLM_ответ_принимает_только_коды_из_кандидатов_и_цитаты_из_текста()
+    {
+        var batch = new[]
+        {
+            new NpaLlmInputRow(
+                "Поставка компьютеров.",
+                3,
+                5,
+                [new NpaLlmCandidate("26.20.11.110", "Компьютеры")]),
+            new NpaLlmInputRow("Услуги связи", 4, 9, [new NpaLlmCandidate("28.20", "Услуги связи")]),
+            new NpaLlmInputRow("Кроме радиоаппаратуры", 5, 2, [new NpaLlmCandidate("26.60", "Радиоаппаратура")]),
+        };
+
+        var response = NpaLlmResponseParser.Parse("""
+            {"act_info":{"requisites":"распоряжение","is_framework_act":false},"results":[
+              {"okpd2_code":"26,20.11.110","item_name":"Компьютеры","match_type":"explicit","flag_active":true,"has_conditions":false,"conditions":[],"source_quote":"Поставка компьютеров","requires_human_review":false},
+              {"okpd2_code":"99.99","item_name":"Выдумка","match_type":"explicit","flag_active":true,"has_conditions":false,"conditions":[],"source_quote":"Поставка компьютеров","requires_human_review":false},
+              {"okpd2_code":"26.60","item_name":"Радиоаппаратура","match_type":"implicit","flag_active":true,"has_conditions":false,"conditions":[],"source_quote":"такого текста нет","requires_human_review":false},
+              {"okpd2_code":"26.60","item_name":"Радиоаппаратура","match_type":"excluded","flag_active":true,"has_conditions":false,"conditions":[],"source_quote":"Кроме радиоаппаратуры","requires_human_review":false},
+              {"okpd2_code":"28.20","item_name":"Услуги связи","match_type":"explicit","flag_active":true,"has_conditions":false,"conditions":[],"source_quote":"Поставка компьютеров","requires_human_review":false},
+              {"okpd2_code":"28.20","item_name":"Услуги связи","match_type":"implicit","flag_active":true,"has_conditions":true,"conditions":["仅限 бюджет"],"source_quote":"Услуги связи","requires_human_review":false},
+              {"okpd2_code":"26.60","item_name":"Радиоаппаратура","match_type":"implicit","flag_active":true,"has_conditions":false,"conditions":[],"source_quote":"Услуги связи","requires_human_review":false},
+              {"okpd2_code":null,"item_name":"","match_type":"not_found","flag_active":false,"has_conditions":false,"conditions":[],"source_quote":"","requires_human_review":true}
+            ]}
+            """);
+
+        Assert.NotNull(response);
+        var (accepted, rejected) = NpaLlmResponseParser.Validate(response!, batch);
+
+        // Галлюцинация, несуществующая цитата, код из другой строки и второй
+        // результат на ту же строку отброшены; not_found не считается ошибкой.
+        Assert.Equal(4, rejected);
+        Assert.Equal(3, accepted.Count);
+
+        var explicitRule = Assert.Single(accepted, item => item.MatchType == "explicit");
+        Assert.Equal("26.20.11.110", explicitRule.Okpd2Code);
+        Assert.Equal(NpaRuleTypes.Include, explicitRule.RuleType);
+        Assert.False(explicitRule.RequiresHumanReview);
+
+        var excluded = Assert.Single(accepted, item => item.MatchType == "excluded");
+        Assert.Equal(NpaRuleTypes.Exclude, excluded.RuleType);
+
+        // Неявное совпадение всегда уходит человеку, даже если модель не попросила.
+        var implicitRule = Assert.Single(accepted, item => item.MatchType == "implicit");
+        Assert.Equal(NpaRuleTypes.Conditional, implicitRule.RuleType);
+        Assert.True(implicitRule.RequiresHumanReview);
+        Assert.Equal("仅限 бюджет", Assert.Single(implicitRule.Conditions));
+        Assert.Equal(4, implicitRule.Page);
+    }
+
+    [Fact]
+    public void LLM_ответ_в_обёртке_markdown_всё_равно_разбирается()
+    {
+        var response = NpaLlmResponseParser.Parse("""
+            ```json
+            {"results":[{"okpd2_code":"30.11.23","match_type":"explicit","source_quote":"суда"}]}
+            ```
+            """);
+
+        Assert.NotNull(response);
+        Assert.Equal("30.11.23", Assert.Single(response!.Results!).Okpd2Code);
+    }
+
+    [Fact]
+    public void Адаптер_отправляет_модели_только_строки_с_кандидатами_из_справочника()
+    {
+        var catalog = Catalog(("26.20", "Компьютеры"));
+        var request = NpaLlmRuleAdapter.BuildRequest(
+            "rp-471",
+            "Тестовый акт",
+            "471-р",
+            [
+                new NpaUnresolvedRow(1, 1, "Компьютеры", "нет кода"),
+                new NpaUnresolvedRow(1, 2, "Неизвестный предмет", "нет кода"),
+            ],
+            catalog,
+            5);
+
+        var row = Assert.Single(request.Rows);
+        Assert.Equal("26.20", Assert.Single(row.Candidates).Code);
+        Assert.Equal(1, row.Page);
+    }
+
+    [Fact]
+    public void Предложения_LLM_попадают_только_в_очередь_проверки()
+    {
+        var analysis = new NpaLlmAnalysisResult(
+            "rp-471",
+            "qwen2.5-coder:7b",
+            1,
+            1,
+            0,
+            [
+                new NpaLlmSuggestion(
+                    "26.20", "Компьютеры", "implicit", NpaRuleTypes.Conditional,
+                    ["только для бюджетных заказчиков"], "Поставка компьютеров",
+                    true, 3, 5),
+            ],
+            null);
+
+        var rule = Assert.Single(NpaLlmRuleAdapter.ToRules(analysis, "qwen2.5-coder:7b"));
+
+        Assert.Equal(NpaRuleStatuses.NeedsReview, rule.Status);
+        Assert.Equal("только для бюджетных заказчиков", rule.ConditionText);
+        Assert.Equal("26.20", rule.Okpd2Code);
+        // Уверенность ниже порога авто-применения: правило не станет активным молча.
+        Assert.True(rule.Confidence < 0.8);
+    }
+
     private static Okpd2Catalog Catalog(params (string Code, string Name)[] items) =>
         Okpd2Catalog.FromItems(items.Select(item => new ReferenceItemInfo(
             item.Code, null, item.Name, true, "{}")));

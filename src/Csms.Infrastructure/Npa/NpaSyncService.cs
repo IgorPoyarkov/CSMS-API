@@ -14,7 +14,8 @@ public sealed record NpaSyncResult(
     int PageCount,
     int UnresolvedCount,
     string? OcrEngine,
-    string Message);
+    string Message,
+    int LlmSuggestions = 0);
 
 /// <summary>Источник официального текста акта.</summary>
 internal sealed record NpaSource(
@@ -39,6 +40,7 @@ public sealed class NpaSyncService(
     INpaOcrEngine ocr,
     INpaRuleStore store,
     IReferenceDataStore references,
+    NpaLlmAnalyzer analyzer,
     ILogger<NpaSyncService> logger)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -183,11 +185,49 @@ public sealed class NpaSyncService(
             ? NpaDocxParser.Parse(new MemoryStream(source.Bytes), resolver)
             : await pdfParser.ParseAsync(source.Bytes, document, resolver, cancellationToken);
 
-        var direct = NpaRuleBuilder.Build(parsed, options.MinAutoConfidence, catalog);
-        var rules = NpaRuleHierarchy.Propagate(direct, catalog);
-
-        var unresolvedJson = JsonSerializer.Serialize(parsed.Unresolved, JsonOptions);
         var title = string.IsNullOrWhiteSpace(document.Title) ? source.Title : document.Title;
+        var direct = NpaRuleBuilder.Build(parsed, options.MinAutoConfidence, catalog).ToList();
+        var llmSuggestions = 0;
+
+        // Второй агент подключается только к спорным строкам и только по явному
+        // включению. Его предложения никогда не становятся авто-правилами.
+        if (options.Llm.Enabled && parsed.Unresolved.Count > 0)
+        {
+            var request = NpaLlmRuleAdapter.BuildRequest(
+                document.Code,
+                title,
+                document.Number,
+                parsed.Unresolved,
+                catalog,
+                options.Llm.MaxCandidates);
+
+            if (request.Rows.Count > 0)
+            {
+                var analysis = await analyzer.AnalyzeAsync(request, cancellationToken);
+                if (analysis.Error is not null)
+                {
+                    logger.LogWarning(
+                        "Акт {Code}: LLM-аналит завершился с ошибкой: {Error}",
+                        document.Code,
+                        analysis.Error);
+                }
+
+                var known = new HashSet<string>(
+                    direct.Select(rule => rule.Okpd2Code), StringComparer.Ordinal);
+                foreach (var rule in NpaLlmRuleAdapter.ToRules(analysis, options.Llm.Model))
+                {
+                    // Явное правило первого агента сильнее предложения модели.
+                    if (known.Add(rule.Okpd2Code))
+                    {
+                        direct.Add(rule);
+                        llmSuggestions++;
+                    }
+                }
+            }
+        }
+
+        var rules = NpaRuleHierarchy.Propagate(direct, catalog);
+        var unresolvedJson = JsonSerializer.Serialize(parsed.Unresolved, JsonOptions);
 
         var import = new NpaDocumentImport(
             document.Code,
@@ -215,17 +255,19 @@ public sealed class NpaSyncService(
                 parsed.PageCount,
                 parsed.Unresolved.Count,
                 ocr.Name,
-                $"Разобрано без записи: прямых правил {direct.Count}, с учётом дерева {rules.Count}.");
+                $"Разобрано без записи: прямых правил {direct.Count}, с учётом дерева {rules.Count}, предложений LLM {llmSuggestions}.",
+                llmSuggestions);
         }
 
         var change = await store.PublishAsync(import, cancellationToken);
 
         logger.LogInformation(
-            "Акт {Code}: версия {Version}, правил {Rules} (прямых {Direct}), страниц {Pages}, не разобрано {Unresolved}",
+            "Акт {Code}: версия {Version}, правил {Rules} (прямых {Direct}, от LLM {Llm}), страниц {Pages}, не разобрано {Unresolved}",
             document.Code,
             change.ToVersion,
             change.RuleCount,
             direct.Count,
+            llmSuggestions,
             parsed.PageCount,
             parsed.Unresolved.Count);
 
@@ -239,7 +281,8 @@ public sealed class NpaSyncService(
             ocr.Name,
             options.AutoPromote
                 ? "Опубликована новая активная версия правил."
-                : "Версия подготовлена, активной осталась прежняя (Npa:AutoPromote=false).");
+                : "Версия подготовлена, активной осталась прежняя (Npa:AutoPromote=false).",
+            llmSuggestions);
     }
 
     private async Task<NpaSource> LoadAsync(

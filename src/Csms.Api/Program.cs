@@ -163,6 +163,10 @@ builder.Services.AddSingleton(provider => new PravoDocumentClient(
 builder.Services.AddSingleton<INpaOcrEngine, TesseractOcrEngine>();
 builder.Services.AddSingleton<NpaLayoutParser>();
 builder.Services.AddSingleton<NpaPdfParser>();
+
+// Второй агент (локальная модель) подключается к OpenAI-совместимому эндпоинту
+// Ollama. Адрес и модель задаются в Npa:Llm, ключи не нужны.
+builder.Services.AddSingleton<NpaLlmAnalyzer>();
 builder.Services.AddSingleton<NpaSyncService>();
 builder.Services.AddHostedService<NpaSyncWorker>();
 

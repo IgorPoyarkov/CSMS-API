@@ -152,13 +152,19 @@ public sealed class NpaLlmOptions
 
     public string Endpoint { get; set; } = "http://localhost:11434";
 
-    public string Model { get; set; } = "qwen2.5-coder:7b";
+    public string Model { get; set; } = "qwen2.5:14b-instruct-q4_K_M";
 
     /// <summary>Таймаут одного запроса к модели.</summary>
-    public int TimeoutSeconds { get; set; } = 120;
+    public int TimeoutSeconds { get; set; } = 180;
 
-    /// <summary>Сколько строк отправлять модели за один заход.</summary>
-    public int BatchSize { get; set; } = 10;
+    /// <summary>
+    /// Сколько строк отправлять модели за один заход. Маленькие батчи надёжнее:
+    /// на большом вводе 7B терял JSON-формат, а 14B справляется с задачей.
+    /// </summary>
+    public int BatchSize { get; set; } = 5;
+
+    /// <summary>Сколько кодов-кандидатов из справочника показывать модели.</summary>
+    public int MaxCandidates { get; set; } = 5;
 
     public void Validate()
     {
@@ -175,6 +181,16 @@ public sealed class NpaLlmOptions
         if (string.IsNullOrWhiteSpace(Model))
         {
             throw new InvalidOperationException("Npa:Llm:Model не задан.");
+        }
+
+        if (BatchSize is < 1 or > 100)
+        {
+            throw new InvalidOperationException("Npa:Llm:BatchSize должен быть в диапазоне 1..100.");
+        }
+
+        if (MaxCandidates is < 1 or > 30)
+        {
+            throw new InvalidOperationException("Npa:Llm:MaxCandidates должен быть в диапазоне 1..30.");
         }
     }
 }

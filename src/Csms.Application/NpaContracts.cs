@@ -141,6 +141,48 @@ public sealed record NpaEffectiveRule(
     string Status,
     string Version);
 
+/// <summary>Кандидат ОКПД2, который передаётся модели вместе с текстом акта.</summary>
+public sealed record NpaLlmCandidate(string Code, string Name);
+
+/// <summary>Спорная строка акта и допустимые для неё коды из справочника.</summary>
+public sealed record NpaLlmInputRow(
+    string Text,
+    int? Page,
+    int? RowIndex,
+    IReadOnlyList<NpaLlmCandidate> Candidates);
+
+/// <summary>Запрос к LLM-аналитику по одному акту.</summary>
+public sealed record NpaLlmAnalysisRequest(
+    string Code,
+    string Title,
+    string? Number,
+    IReadOnlyList<NpaLlmInputRow> Rows);
+
+/// <summary>
+/// Вывод LLM-аналитика. Код берётся только из переданных кандидатов, цитата —
+/// из текста акта; нарушения отбрасываются до попадания в правила.
+/// </summary>
+public sealed record NpaLlmSuggestion(
+    string Okpd2Code,
+    string ItemName,
+    string MatchType,
+    string RuleType,
+    IReadOnlyList<string> Conditions,
+    string SourceQuote,
+    bool RequiresHumanReview,
+    int? Page,
+    int? RowIndex);
+
+/// <summary>Итог разбора спорных строк моделью (без публикации версии).</summary>
+public sealed record NpaLlmAnalysisResult(
+    string Code,
+    string Model,
+    int InputRows,
+    int SuggestionCount,
+    int RejectedCount,
+    IReadOnlyList<NpaLlmSuggestion> Suggestions,
+    string? Error);
+
 /// <summary>Хранилище версий правил НПА.</summary>
 public interface INpaRuleStore
 {
