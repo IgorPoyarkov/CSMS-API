@@ -145,7 +145,7 @@ public class ContractChangePostgresTests
                 change.Events.Select(entry => (entry.From, entry.To, entry.Action)),
                 reloaded.Events.Select(entry => (entry.From, entry.To, entry.Action)));
 
-            Assert.Empty(reloaded.Validate().Where(issue => issue.IsError));
+            Assert.DoesNotContain(reloaded.Validate(), issue => issue.IsError);
         }
         finally
         {

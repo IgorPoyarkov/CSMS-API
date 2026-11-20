@@ -130,7 +130,7 @@ public class ContractChangeContractsTests
 
         Assert.Equal(change.Id, response.Id);
         Assert.Equal(ContractChangeStatus.Draft, response.Status);
-        Assert.Empty(response.Issues.Where(issue => issue.IsError));
+        Assert.DoesNotContain(response.Issues, issue => issue.IsError);
 
         var document = Assert.Single(response.Documents);
         Assert.Equal(ContractChangeDocumentType.Agreement, document.Type);

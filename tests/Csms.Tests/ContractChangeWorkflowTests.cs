@@ -297,7 +297,7 @@ public class ContractChangeWorkflowTests
         Assert.Equal("Э-777", change.EisRegistrationNumber);
         Assert.Equal(new DateOnly(2026, 11, 26), change.EisRegistrationDate);
         Assert.Equal(ContractChangeSamples.Approver, change.RegisteredBy);
-        Assert.Empty(change.Validate().Where(issue => issue.IsError));
+        Assert.DoesNotContain(change.Validate(), issue => issue.IsError);
     }
 
     [Fact]

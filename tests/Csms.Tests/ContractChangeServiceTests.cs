@@ -163,7 +163,7 @@ public class ContractChangeServiceTests
 
         var reloaded = await service.GetAsync(change.Id, CancellationToken.None);
         Assert.Equal(ContractChangeStatus.RegisteredInEis, reloaded.Status);
-        Assert.Empty(reloaded.Validate().Where(issue => issue.IsError));
+        Assert.DoesNotContain(reloaded.Validate(), issue => issue.IsError);
     }
 
     [Fact]
