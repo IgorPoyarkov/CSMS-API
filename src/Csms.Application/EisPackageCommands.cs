@@ -13,7 +13,9 @@ public sealed record CreatePackageCommand(
     EisDocumentType DocumentType,
     string? ContractEisNumber,
     string? Ikz,
-    string? PayloadXml = null);
+    string? PayloadXml = null,
+    EisPackageSource? Source = null,
+    EisCustomerSnapshot? Customer = null);
 
 /// <summary>Подпись, полученная на рабочем месте заказчика.</summary>
 public sealed record AttachSignatureCommand(

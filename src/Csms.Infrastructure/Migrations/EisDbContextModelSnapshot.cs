@@ -1039,6 +1039,9 @@ namespace Csms.Infrastructure.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
+                    b.Property<string>("Customer")
+                        .HasColumnType("jsonb");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1081,6 +1084,9 @@ namespace Csms.Infrastructure.Migrations
                     b.Property<string>("SignerThumbprint")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Source")
+                        .HasColumnType("jsonb");
 
                     b.Property<string>("Status")
                         .IsRequired()

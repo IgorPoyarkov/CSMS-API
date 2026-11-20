@@ -49,6 +49,12 @@ public sealed class EisPackageRow
 
     /// <summary>Ошибки ФЛК целиком, как их вернула ЕИС (колонка jsonb).</summary>
     public List<FlkError> FlkErrors { get; set; } = [];
+
+    /// <summary>Ссылка на документ-источник одним jsonb-полем (Б4).</summary>
+    public EisPackageSource? Source { get; set; }
+
+    /// <summary>Снимок реквизитов заказчика одним jsonb-полем (Б4).</summary>
+    public EisCustomerSnapshot? Customer { get; set; }
 }
 
 /// <summary>

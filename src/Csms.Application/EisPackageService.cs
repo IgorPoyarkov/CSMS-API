@@ -38,6 +38,9 @@ public sealed class EisPackageService(
 
         // Готовый XML извещения или проекта контракта приходит с фронта:
         // его нельзя пересобирать заглушкой, иначе уйдёт не тот документ
+        // Ссылка на источник и снимок заказчика приходят вместе с XML: они
+        // фиксируются в момент создания и не пересчитываются при повторных
+        // действиях над пакетом (Б4).
         var built = string.IsNullOrEmpty(payloadXml)
             ? xmlBuilder.Build(
                 command.DocumentType,
@@ -53,7 +56,9 @@ public sealed class EisPackageService(
             command.Ikz,
             built.Xml,
             built.SchemaVersion,
-            Now);
+            Now,
+            command.Source,
+            command.Customer);
 
         await repository.AddAsync(package, cancellationToken);
 

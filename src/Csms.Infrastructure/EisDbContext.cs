@@ -14,6 +14,13 @@ public sealed class EisDbContext(DbContextOptions<EisDbContext> options) : DbCon
 {
     private static readonly JsonSerializerOptions FlkJsonOptions = new(JsonSerializerDefaults.Web);
 
+    /// <summary>
+    /// Источник и снимок заказчика хранятся jsonb: у фронта могут появиться
+    /// новые реквизиты раньше, чем миграция в API. Потерять их нельзя — пакет
+    /// живёт годами и подписывался под конкретным снимком.
+    /// </summary>
+    private static readonly JsonSerializerOptions OriginJsonOptions = new(JsonSerializerDefaults.Web);
+
     public DbSet<EisPackageRow> Packages => Set<EisPackageRow>();
 
     public DbSet<EisPackageEventRow> Events => Set<EisPackageEventRow>();
@@ -82,6 +89,18 @@ public sealed class EisDbContext(DbContextOptions<EisDbContext> options) : DbCon
                 .HasConversion(
                     value => JsonSerializer.Serialize(value, FlkJsonOptions),
                     json => JsonSerializer.Deserialize<List<FlkError>>(json, FlkJsonOptions) ?? new List<FlkError>());
+
+            entity.Property(row => row.Source)
+                .HasColumnType("jsonb")
+                .HasConversion(
+                    value => JsonSerializer.Serialize(value, OriginJsonOptions),
+                    json => JsonSerializer.Deserialize<EisPackageSource>(json, OriginJsonOptions));
+
+            entity.Property(row => row.Customer)
+                .HasColumnType("jsonb")
+                .HasConversion(
+                    value => JsonSerializer.Serialize(value, OriginJsonOptions),
+                    json => JsonSerializer.Deserialize<EisCustomerSnapshot>(json, OriginJsonOptions));
 
             // Оптимистичная блокировка без изменений в домене: xmin — колонка,
             // которую PostgreSQL генерирует сам, но EF ведёт проверку в WHERE

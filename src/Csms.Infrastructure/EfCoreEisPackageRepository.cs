@@ -152,7 +152,9 @@ public sealed class EfCoreEisPackageRepository(IDbContextFactory<EisDbContext> c
                     item.Comment))
                 .ToList(),
             row.CreatedAt,
-            row.UpdatedAt);
+            row.UpdatedAt,
+            row.Source,
+            row.Customer);
 
     private static EisPackageRow ToRow(EisPackage package) => new()
     {
@@ -171,6 +173,8 @@ public sealed class EfCoreEisPackageRepository(IDbContextFactory<EisDbContext> c
         CreatedAt = package.CreatedAt,
         UpdatedAt = package.UpdatedAt,
         FlkErrors = package.FlkErrors.ToList(),
+        Source = package.Source,
+        Customer = package.Customer,
     };
 
     private static void MapInto(EisPackage package, EisPackageRow row)
@@ -185,6 +189,10 @@ public sealed class EfCoreEisPackageRepository(IDbContextFactory<EisDbContext> c
         row.LastError = package.LastError;
         row.UpdatedAt = package.UpdatedAt;
         row.FlkErrors = package.FlkErrors.ToList();
+
+        // Source и Customer намеренно не перезаписываются: они фиксируются при
+        // создании, а строка прочитана из БД вместе с ними. Повторная подпись
+        // или возврат в работу не должны менять снимок заказчика.
     }
 
     private static EisPackageEventRow ToEventRow(Guid packageId, int order, EisPackageEvent item) => new()

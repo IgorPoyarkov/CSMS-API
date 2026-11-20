@@ -7,12 +7,16 @@ namespace Csms.Api;
 /// <remarks>
 /// <c>PayloadXml</c> необязателен: для извещения и проекта контракта фронт
 /// присылает готовый XML, для остальных типов шлюз собирает заглушку.
+/// <c>Source</c> и <c>Customer</c> (Б4) тоже необязательны и не требуют
+/// синхронного релиза фронта: старые запросы без них продолжают работать.
 /// </remarks>
 public sealed record CreatePackageRequest(
     EisDocumentType DocumentType,
     string? ContractEisNumber,
     string? Ikz,
-    string? PayloadXml = null);
+    string? PayloadXml = null,
+    EisPackageSource? Source = null,
+    EisCustomerSnapshot? Customer = null);
 
 /// <summary>
 /// Тело запроса на возврат отклонённого пакета в работу.
@@ -57,6 +61,8 @@ public sealed record EisPackageResponse(
     string PayloadSha256,
     string PayloadSchemaVersion,
     bool IsPlaceholderFormat,
+    EisPackageSource? Source,
+    EisCustomerSnapshot? Customer,
     string? SignatureBase64,
     string? SignerThumbprint,
     DateTimeOffset? SignedAt,
@@ -78,6 +84,8 @@ public sealed record EisPackageResponse(
             package.PayloadSha256,
             package.PayloadSchemaVersion,
             package.PayloadSchemaVersion.StartsWith("placeholder", StringComparison.OrdinalIgnoreCase),
+            package.Source,
+            package.Customer,
             package.SignatureBase64,
             package.SignerThumbprint,
             package.SignedAt,

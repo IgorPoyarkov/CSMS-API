@@ -30,7 +30,9 @@ public sealed class EisPackage
         string ikz,
         string payloadXml,
         string payloadSchemaVersion,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        EisPackageSource? source,
+        EisCustomerSnapshot? customer)
     {
         Id = id;
         DocumentType = documentType;
@@ -39,6 +41,8 @@ public sealed class EisPackage
         PayloadXml = payloadXml;
         PayloadSchemaVersion = payloadSchemaVersion;
         PayloadSha256 = Sha256Hex(payloadXml);
+        Source = source;
+        Customer = customer;
         CreatedAt = createdAt;
         UpdatedAt = createdAt;
         Status = EisPackageStatus.Draft;
@@ -60,6 +64,15 @@ public sealed class EisPackage
 
     /// <summary>Версия схемы, по которой собран <see cref="PayloadXml"/>.</summary>
     public string PayloadSchemaVersion { get; private set; }
+
+    /// <summary>
+    /// Документ CSMS, из которого собран пакет. Фиксируется при создании и не
+    /// меняется последующими действиями над пакетом.
+    /// </summary>
+    public EisPackageSource? Source { get; }
+
+    /// <summary>Снимок реквизитов заказчика на момент создания пакета.</summary>
+    public EisCustomerSnapshot? Customer { get; }
 
     /// <summary>SHA-256 содержимого: по нему сверяется, что подписали именно этот файл.</summary>
     public string PayloadSha256 { get; private set; }
@@ -94,7 +107,9 @@ public sealed class EisPackage
         string? ikz,
         string payloadXml,
         string payloadSchemaVersion,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        EisPackageSource? source = null,
+        EisCustomerSnapshot? customer = null)
     {
         var number = EisRegistryNumber.Normalize(contractEisNumber);
 
@@ -122,7 +137,70 @@ public sealed class EisPackage
             (ikz ?? string.Empty).Trim(),
             payloadXml,
             payloadSchemaVersion,
-            now);
+            now,
+            NormalizeSource(source),
+            NormalizeCustomer(customer));
+    }
+
+    /// <summary>
+    /// Проверить ссылку на источник: пустой documentId делает её бесполезной,
+    /// а неизвестный вид документа не даст фронту найти документ-источник.
+    /// </summary>
+    private static EisPackageSource? NormalizeSource(EisPackageSource? source)
+    {
+        if (source is null)
+        {
+            return null;
+        }
+
+        if (!Enum.IsDefined(source.DocumentKind))
+        {
+            throw new DomainException(
+                $"Неизвестный вид документа-источника пакета ЕИС: {source.DocumentKind}.");
+        }
+
+        var id = Trim(source.DocumentId, 128, "source.documentId");
+
+        if (string.IsNullOrEmpty(id))
+        {
+            throw new DomainException(
+                "Не заполнен source.documentId: без идентификатора документа-источника пакет нельзя пересобрать.");
+        }
+
+        return source with
+        {
+            DocumentId = id!,
+            DocumentNumber = Trim(source.DocumentNumber, 128, "source.documentNumber"),
+        };
+    }
+
+    private static EisCustomerSnapshot? NormalizeCustomer(EisCustomerSnapshot? customer) =>
+        customer is null
+            ? null
+            : customer with
+            {
+                FullName = Trim(customer.FullName, 512, "customer.fullName"),
+                ShortName = Trim(customer.ShortName, 256, "customer.shortName"),
+                Inn = Trim(customer.Inn, 32, "customer.inn"),
+                Kpp = Trim(customer.Kpp, 32, "customer.kpp"),
+                Okopf = Trim(customer.Okopf, 32, "customer.okopf"),
+                Okfs = Trim(customer.Okfs, 32, "customer.okfs"),
+                Oktmo = Trim(customer.Oktmo, 32, "customer.oktmo"),
+                OktmoPpo = Trim(customer.OktmoPpo, 32, "customer.oktmoPpo"),
+                RegNumber = Trim(customer.RegNumber, 32, "customer.regNumber"),
+            };
+
+    private static string? Trim(string? value, int maxLength, string field)
+    {
+        var text = value?.Trim();
+
+        if (text is not null && text.Length > maxLength)
+        {
+            throw new DomainException(
+                $"Поле «{field}» длиннее {maxLength} символов, разрешённых для пакета ЕИС.");
+        }
+
+        return text is null || text.Length == 0 ? null : text;
     }
 
     /// <summary>Начать подписание. С этого момента содержимое менять нельзя.</summary>
@@ -306,7 +384,9 @@ public sealed class EisPackage
         IReadOnlyList<FlkError> flkErrors,
         IReadOnlyList<EisPackageEvent> history,
         DateTimeOffset createdAt,
-        DateTimeOffset updatedAt)
+        DateTimeOffset updatedAt,
+        EisPackageSource? source = null,
+        EisCustomerSnapshot? customer = null)
     {
         var package = new EisPackage(
             id,
@@ -315,7 +395,9 @@ public sealed class EisPackage
             ikz,
             payloadXml,
             payloadSchemaVersion,
-            createdAt);
+            createdAt,
+            source,
+            customer);
 
         package.PayloadSchemaVersion = payloadSchemaVersion;
         package.PayloadSha256 = Sha256Hex(payloadXml);
