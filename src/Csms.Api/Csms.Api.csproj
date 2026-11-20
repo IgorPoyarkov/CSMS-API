@@ -9,6 +9,17 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Закоммиченные XSD должны лежать рядом со сборкой: EisSchemaCatalog
+         по умолчанию ищет schemas/<версия> в BaseDirectory. Без явного
+         копирования чистая сборка не находит схемы и валидация XML молча
+         пропускается. Промежуточную выгрузку .incoming не переносим. -->
+    <Content Include="..\..\schemas\**\*"
+             Exclude="..\..\schemas\.incoming\**\*;..\..\schemas\README.md"
+             Link="schemas\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.0" />
     <!-- Для dotnet-ef: миграции, создание которых происходит через дизайн-тайм контекст -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">

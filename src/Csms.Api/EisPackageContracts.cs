@@ -14,6 +14,16 @@ public sealed record CreatePackageRequest(
     string? Ikz,
     string? PayloadXml = null);
 
+/// <summary>
+/// Тело запроса на возврат отклонённого пакета в работу.
+/// <remarks>
+/// <c>PayloadXml</c> необязателен: без него сохраняется прежнее содержимое.
+/// Это важно для извещений и проектов контракта, XML которых собирает фронт —
+/// пересборка заглушкой потеряла бы готовый документ.
+/// </remarks>
+/// </summary>
+public sealed record RevisePackageRequest(string? PayloadXml = null);
+
 /// <summary>Подпись, полученная плагином на рабочем месте заказчика.</summary>
 public sealed record AttachSignatureRequest(
     string? SignatureBase64,

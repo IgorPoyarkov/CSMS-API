@@ -228,21 +228,35 @@ public sealed class EisPackageService(
         }
     }
 
-    /// <summary>Вернуть отклоненный пакет в работу с пересборкой содержимого.</summary>
-    public async Task<EisPackage> ReviseAsync(Guid id, CancellationToken cancellationToken)
+    /// <summary>
+    /// Вернуть отклоненный пакет в работу.
+    ///
+    /// Раньше здесь безусловно вызывался сборщик заглушки. Для извещения и
+    /// проекта контракта, XML которых присылает фронт, это стирало настоящий
+    /// документ: повторная подпись ставилась уже под другим содержимым. Теперь
+    /// готовый XML сохраняется; пересобираем только пакеты-заглушки, у которых
+    /// своего содержимого нет. Исправленный XML можно передать в
+    /// <paramref name="payloadXml"/> — он пройдёт ту же XSD-проверку.
+    /// </summary>
+    public async Task<EisPackage> ReviseAsync(
+        Guid id,
+        CancellationToken cancellationToken,
+        string? payloadXml = null)
     {
         var package = await GetAsync(id, cancellationToken);
 
         package.Revise(Now);
 
-        var rebuilt = xmlBuilder.Build(
-            package.DocumentType,
-            package.ContractEisNumber,
-            package.Ikz);
+        var replacement = payloadXml?.Trim();
+        var built = !string.IsNullOrEmpty(replacement)
+            ? new XmlBuildResult(replacement, package.PayloadSchemaVersion)
+            : package.PayloadSchemaVersion.StartsWith("placeholder", StringComparison.OrdinalIgnoreCase)
+                ? xmlBuilder.Build(package.DocumentType, package.ContractEisNumber, package.Ikz)
+                : new XmlBuildResult(package.PayloadXml, package.PayloadSchemaVersion);
 
-        EnsureXsdValid(rebuilt);
+        EnsureXsdValid(built);
 
-        package.UpdatePayload(rebuilt.Xml, rebuilt.SchemaVersion, Now);
+        package.UpdatePayload(built.Xml, built.SchemaVersion, Now);
 
         await SaveAsync(package, cancellationToken);
 

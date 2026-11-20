@@ -115,15 +115,16 @@ public static class EisPackageEndpoints
         group.MapPost("/{id:guid}/revise", async (
             Guid id,
             EisPackageService service,
-            CancellationToken cancellationToken) =>
+            CancellationToken cancellationToken,
+            RevisePackageRequest? request = null) =>
         {
-            var package = await service.ReviseAsync(id, cancellationToken);
+            var package = await service.ReviseAsync(id, cancellationToken, request?.PayloadXml);
 
             return Results.Ok(EisPackageResponse.From(package));
         })
         .Produces<EisPackageResponse>()
         .ProducesProblem(StatusCodes.Status409Conflict)
-        .WithSummary("Вернуть отклонённый пакет в работу");
+        .WithSummary("Вернуть отклонённый пакет в работу, сохранив содержимое");
 
         return app;
     }

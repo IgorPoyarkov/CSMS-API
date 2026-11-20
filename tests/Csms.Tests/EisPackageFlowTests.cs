@@ -103,9 +103,55 @@ public sealed class EisPackageFlowTests
         Assert.Equal(EisPackageStatus.Draft, package.Status);
         Assert.Empty(package.FlkErrors);
         Assert.Null(package.SignatureBase64);
+        Assert.StartsWith("placeholder", package.PayloadSchemaVersion, StringComparison.Ordinal);
 
         package = await SignAsync(service, package.Id);
         Assert.Equal(EisPackageStatus.Signed, package.Status);
+    }
+
+    [Fact]
+    public async Task Возврат_отклонённого_извещения_не_затирает_XML_фронта()
+    {
+        const string payload = "<fcsNotificationEF><id>123</id></fcsNotificationEF>";
+        var service = NewService();
+        var package = await service.CreateAsync(
+            new CreatePackageCommand(
+                EisDocumentType.Notification,
+                RejectedContractNumber,
+                "2612345678901234567890",
+                payload),
+            CancellationToken.None);
+
+        package = await SignAsync(service, package.Id);
+        package = await service.SendAsync(package.Id, CancellationToken.None);
+        package = await service.RefreshStatusAsync(package.Id, CancellationToken.None);
+        Assert.Equal(EisPackageStatus.RejectedByFlk, package.Status);
+
+        package = await service.ReviseAsync(package.Id, CancellationToken.None);
+
+        Assert.Equal(EisPackageStatus.Draft, package.Status);
+        Assert.Equal(payload, package.PayloadXml);
+        Assert.Equal("17.0", package.PayloadSchemaVersion);
+    }
+
+    [Fact]
+    public async Task Возврат_в_работу_принимает_исправленный_XML()
+    {
+        const string original = "<fcsNotificationEF><id>1</id></fcsNotificationEF>";
+        const string corrected = "<fcsNotificationEF><id>2</id></fcsNotificationEF>";
+        var service = NewService();
+        var package = await service.CreateAsync(
+            new CreatePackageCommand(EisDocumentType.Notification, RejectedContractNumber, null, original),
+            CancellationToken.None);
+
+        package = await SignAsync(service, package.Id);
+        package = await service.SendAsync(package.Id, CancellationToken.None);
+        package = await service.RefreshStatusAsync(package.Id, CancellationToken.None);
+
+        package = await service.ReviseAsync(package.Id, CancellationToken.None, corrected);
+
+        Assert.Equal(corrected, package.PayloadXml);
+        Assert.Equal("17.0", package.PayloadSchemaVersion);
     }
 
     [Fact]
