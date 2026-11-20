@@ -8,8 +8,6 @@ using Csms.Infrastructure.Liability;
 using Csms.Infrastructure.Npa;
 using Microsoft.EntityFrameworkCore;
 
-const string FrontendPolicy = "frontend";
-
 var builder = WebApplication.CreateBuilder(args);
 
 // Статусы и типы документов отдаём строками ("Signed", "SmpAttraction"):
@@ -17,13 +15,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
-// В разработке фронт живёт на другом порту Vite, поэтому браузеру нужно
-// разрешение. Список origin-ов точечный, а не «любой»: иначе первый же
-// открытый чужой сайт смог бы дёргать API пакетов от имени заказчика
-builder.Services.AddCors(options => options.AddPolicy(FrontendPolicy, policy => policy
-    .WithOrigins("http://localhost:5173", "http://localhost:4173")
-    .AllowAnyHeader()
-    .AllowAnyMethod()));
+// В разработке фронт живёт на другом порту Vite (5173, а если он занят —
+// 5174 и далее), поэтому браузеру нужно разрешение. Список origin-ов
+// точечный, а не «любой»: иначе первый же открытый чужой сайт смог бы
+// дёргать API пакетов от имени заказчика. Origins можно расширить через
+// Cors:AllowedOrigins или CORS_ALLOWED_ORIGINS (через запятую).
+builder.Services.AddFrontendCors(builder.Configuration);
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<DomainExceptionHandler>();
@@ -223,7 +220,9 @@ builder.Services.AddSingleton<IOrder158nPoolCatalog, Order158nPoolCatalog>();
 var app = builder.Build();
 
 app.UseExceptionHandler();
-app.UseCors(FrontendPolicy);
+// UseCors обязан стоять до авторизации и эндпоинтов: иначе preflight OPTIONS
+// уйдёт в авторизацию и вернётся без Access-Control-Allow-Origin
+app.UseCors(FrontendCors.PolicyName);
 app.UseAuthentication();
 app.UseAuthorization();
 
