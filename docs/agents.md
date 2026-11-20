@@ -236,10 +236,40 @@ Validate, Reduce, in-memory store), оркестратор `DocumentExtractionSe
 `GET /api/documents/{sha256}/functions`, `GET /api/documents/{sha256}/report`,
 `POST /api/documents/functions/{id}/verify`.
 
-**Состояние (2026-11-20):** реализован, `dotnet test` — 76 passed / 3 skipped.
-Эталон для приёмки — `tests/Csms.Tests/Fixtures/order158n-golden.json` (41 пункт
-из `order158nTaskPool.ts`). Ограничения: хранилище in-memory, граф зависимостей
-и нечёткие пары Reduce не сделаны.
+**Состояние (2026-11-20):** реализован, `dotnet test` — 79 passed / 3 skipped.
+Эталон для приёмки — `tests/Csms.Tests/Fixtures/order158n-golden.json` (41 пункт).
+Рабочий пул задач теперь лежит в БД и отдаётся `GET /api/order158n/pool` (см. §7),
+фронтовый `order158nTaskPool.ts` — только чистые функции сборки маршрута.
+Ограничения: хранилище результатов извлечения in-memory, граф зависимостей и
+нечёткие пары Reduce не сделаны; живой прогон 158н пока покрывает 8/41 пункт.
+
+---
+
+## 7. Пул задач по Приказу № 158н как версионируемый справочник
+
+**Зачем:** 41 пункт типового маршрута контрактной службы раньше был жёстко
+зашит в `csms/src/services/Tasks/order158nTaskPool.ts` и дублировался в
+ эталонной фикстуре бэка. Теперь единственный рабочий источник — активная версия
+справочника `order158nPool` в `EIS_STORE` (memory или PostgreSQL, схема `ref`).
+
+**Где:** контракты `src/Csms.Application/Order158nPoolContracts.cs`, каталог
+`src/Csms.Infrastructure/Order158nPoolCatalog.cs`, эталон первичного заполнения
+`src/Csms.Infrastructure/Seeds/order158n-pool.json`, эндпоинты
+`src/Csms.Api/Order158nPoolEndpoints.cs`.
+
+- Первый запуск импортирует эталон из официального приказа (SHA-256 файла), дальше
+  чтение идёт только из `IReferenceDataStore`; версия не перезаписывается.
+- `GET /api/order158n/pool` — активная версия, 41 пункт, реквизиты источника;
+  `GET /api/order158n/pool/{id}` — поиск по ID или номеру пункта (`п. 3.1.1`).
+- Каталог виден в `/api/references/datasets` как `order158nPool`; пул используется
+  TasksPage, TaskAssignModal, TaskDetailPage, MyTasks, ContractServiceForm и
+  `regulatoryDeadlines` через один react-query хук `useOrder158nPool()`.
+- `publishedAt` эталона приводится к UTC: Npgsql не принимает `DateTimeOffset`
+  с ненулевым offset для `timestamp with time zone`.
+- чтение идёт через `IReferenceDataStore.GetAllWithPayloadAsync`: обычный
+  `GetAllAsync` не выбор `PayloadJson` (там снимок ОКПД2 на десятки МБ), а пул
+  хранит каждый пункт целиком именно в `payload`. В memory-режиме метод — алиас
+  на `GetAllAsync`, в PostgreSQL — отдельный запрос с колонкой `PayloadJson`.
 
 ---
 

@@ -87,6 +87,10 @@ public sealed class InMemoryReferenceDataStore : IReferenceDataStore
         }
     }
 
+    public Task<IReadOnlyList<ReferenceItemInfo>> GetAllWithPayloadAsync(
+        string dataset,
+        CancellationToken cancellationToken = default) => GetAllAsync(dataset, cancellationToken);
+
     public Task<ReferenceDataUpdateEvent> PublishAsync(
         ReferenceImportRequest request,
         CancellationToken cancellationToken = default)

@@ -79,6 +79,14 @@ public interface IReferenceDataStore
         string dataset,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Все строки активной версии вместе с payload — для небольших справочников
+    /// (например, пула 158н), где каждая запись — целый объект, а не код/имя.
+    /// </summary>
+    Task<IReadOnlyList<ReferenceItemInfo>> GetAllWithPayloadAsync(
+        string dataset,
+        CancellationToken cancellationToken = default);
+
     Task<ReferenceDataUpdateEvent> PublishAsync(
         ReferenceImportRequest request,
         CancellationToken cancellationToken = default);

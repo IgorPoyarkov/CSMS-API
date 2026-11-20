@@ -195,6 +195,11 @@ builder.Services.AddSingleton<DocumentFunctionValidator>();
 builder.Services.AddSingleton<DocumentFunctionReducer>();
 builder.Services.AddSingleton<DocumentExtractionService>();
 
+// Пул 158н — версионируемый справочник в хранилище НСИ (ref.datasets),
+// поэтому регистрация одна для memory и postgres: каталог сам наполнит БД
+// эталоном, если активной версии ещё нет.
+builder.Services.AddSingleton<IOrder158nPoolCatalog, Order158nPoolCatalog>();
+
 var app = builder.Build();
 
 app.UseExceptionHandler();
@@ -211,6 +216,7 @@ app.MapEisSchemaEndpoints();
 app.MapReferenceDataEndpoints();
 app.MapNpaEndpoints();
 app.MapDocumentFunctionEndpoints();
+app.MapOrder158nPoolEndpoints();
 app.MapAccessEndpoints();
 
 app.Run();

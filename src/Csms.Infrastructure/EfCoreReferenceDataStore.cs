@@ -120,6 +120,37 @@ public sealed class EfCoreReferenceDataStore(
             "{}")).ToArray();
     }
 
+    public async Task<IReadOnlyList<ReferenceItemInfo>> GetAllWithPayloadAsync(
+        string dataset,
+        CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+
+        var active = await db.ReferenceDatasets
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                row => row.Code == dataset && row.IsActive,
+                cancellationToken);
+
+        if (active is null)
+        {
+            return [];
+        }
+
+        var rows = await db.ReferenceItems
+            .AsNoTracking()
+            .Where(row => row.DatasetId == active.Id)
+            .Select(row => new { row.Code, row.ParentCode, row.Name, row.Actual, row.PayloadJson })
+            .ToListAsync(cancellationToken);
+
+        return rows.Select(row => new ReferenceItemInfo(
+            row.Code,
+            row.ParentCode,
+            row.Name,
+            row.Actual,
+            row.PayloadJson)).ToArray();
+    }
+
     public async Task<ReferenceDataUpdateEvent> PublishAsync(
         ReferenceImportRequest request,
         CancellationToken cancellationToken = default)
