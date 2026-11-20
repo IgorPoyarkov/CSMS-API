@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication;
 using Csms.Application;
 using Csms.Infrastructure;
 using Csms.Infrastructure.Documents;
+using Csms.Infrastructure.Liability;
 using Csms.Infrastructure.Npa;
 using Microsoft.EntityFrameworkCore;
 
@@ -60,6 +61,8 @@ if (store == "postgres")
     builder.Services.AddSingleton<IReferenceDataStore, EfCoreReferenceDataStore>();
     builder.Services.AddSingleton<IAccessStore, EfCoreAccessStore>();
     builder.Services.AddSingleton<INpaRuleStore, EfCoreNpaRuleStore>();
+    builder.Services.AddSingleton<ILiabilityMappingStore, EfCoreLiabilityMappingStore>();
+    builder.Services.AddSingleton<ILiabilityRetriever, EfCoreLiabilityRetriever>();
 }
 else
 {
@@ -67,6 +70,9 @@ else
     builder.Services.AddSingleton<IReferenceDataStore, InMemoryReferenceDataStore>();
     builder.Services.AddSingleton<IAccessStore, InMemoryAccessStore>();
     builder.Services.AddSingleton<INpaRuleStore, InMemoryNpaRuleStore>();
+    // В memory-режиме нет pgvector: пул пуст, но конвейер и эндпоинт живут.
+    builder.Services.AddSingleton<ILiabilityMappingStore, InMemoryLiabilityMappingStore>();
+    builder.Services.AddSingleton<ILiabilityRetriever, EmptyLiabilityRetriever>();
 }
 
 // Импорт справочников рассылается фронту отдельным SSE-потоком
@@ -195,6 +201,20 @@ builder.Services.AddSingleton<DocumentFunctionValidator>();
 builder.Services.AddSingleton<DocumentFunctionReducer>();
 builder.Services.AddSingleton<DocumentExtractionService>();
 
+// Compliance & Liability Mapping: арбитр и эмбеддинги — та же локальная
+// Ollama; пул кандидатов живёт в PostgreSQL (схема legal) при EIS_STORE=postgres.
+var liabilityOptions = new LiabilityMappingOptions();
+builder.Configuration.GetSection(LiabilityMappingOptions.SectionName)
+    .Bind(liabilityOptions);
+liabilityOptions.Validate();
+builder.Services.AddSingleton(liabilityOptions);
+builder.Services.AddSingleton<ILlmCompletionClient, OllamaCompletionClient>();
+builder.Services.AddSingleton<ILiabilityEmbeddingService, OllamaEmbeddingService>();
+builder.Services.AddSingleton<IViolationHypothesisGenerator, ViolationHypothesisGenerator>();
+builder.Services.AddSingleton<IMappingValidator, MappingValidator>();
+builder.Services.AddSingleton<ILlmArbiter, LlmArbiter>();
+builder.Services.AddSingleton<IDutyLiabilityMappingService, DutyLiabilityMappingService>();
+
 // Пул 158н — версионируемый справочник в хранилище НСИ (ref.datasets),
 // поэтому регистрация одна для memory и postgres: каталог сам наполнит БД
 // эталоном, если активной версии ещё нет.
@@ -217,6 +237,7 @@ app.MapReferenceDataEndpoints();
 app.MapNpaEndpoints();
 app.MapDocumentFunctionEndpoints();
 app.MapOrder158nPoolEndpoints();
+app.MapLiabilityMappingEndpoints();
 app.MapAccessEndpoints();
 
 app.Run();

@@ -16,6 +16,7 @@
 | **Опрос ЕИС 44-FЗ `getDocsIP`** | отдельный `.NET 9` worker | Последовательно опрашивает регионы/подсистемы/даты, скачивает архивы, дедуплицирует документы | `csms/eis-parser/src/Eis44Parser.Worker/PollingWorker.cs` | Код и тесты готовы; live заблокирован токеном ЕИС/контуром (старый токен утёк в git) |
 | **Импортёр справочников НСИ** | on-demand импортёр, не демон | Обходит публичное дерево ЕИС и публикует версию набора с SHA-256 | `csms-api`: `EisNsiTreeImporter`, `/api/references/import/eis/{dataset}` | ОКПД2 загружен: 21 066 кодов; КТРУ/адреса ждут выгрузок по токену |
 | **Извлечение функций из документа** | конвейер Ingest→Map→Validate→Reduce→Curate (по запросу) | Сегментирует любой НПА/регламент/ТЗ, выделяет атомарные подзадачи и раскладывает по таксономии контрактной службы | `csms-api`: `DocumentExtractionService`, `Csms.Infrastructure/Documents/`, `DocumentFunctionsEndpoints.cs` | Реализован; 76 тестов зелёные; первый целевой документ — Приказ № 158н |
+| **Compliance & Liability Mapping** | конвейер по запросу (4 шага) | Обязанность → гипотезы нарушения → гибридный пул норм → строгий LLM-арбитр → валидатор/аудит | `csms-api`: `DutyLiabilityMappingService`, `Csms.Infrastructure/Liability/`, `LiabilityMappingEndpoints.cs` | Реализован, 17 новых тестов зелёные; живой прогон ждёт pgvector в локальном PostgreSQL |
 
 ---
 
@@ -270,6 +271,46 @@ Validate, Reduce, in-memory store), оркестратор `DocumentExtractionSe
   `GetAllAsync` не выбор `PayloadJson` (там снимок ОКПД2 на десятки МБ), а пул
   хранит каждый пункт целиком именно в `payload`. В memory-режиме метод — алиас
   на `GetAllAsync`, в PostgreSQL — отдельный запрос с колонкой `PayloadJson`.
+
+---
+
+## 8. Compliance & Liability Mapping (четвёртый LLM-агент)
+
+**Зачем:** связать структурированную обязанность (Сущность А) со всеми релевантными
+нормами ответственности (Сущность Б) — один ко многим, без выдуманных статей
+и без потери общих/бланкетных составов.
+
+**Где:** `src/Csms.Application/LiabilityMapping*.cs`,
+`ViolationHypothesisGenerator.cs`, `LlmArbiterResponseParser.cs`,
+`MappingValidator.cs`; `src/Csms.Infrastructure/Liability/`;
+`src/Csms.Api/LiabilityMappingEndpoints.cs`; бриф —
+`docs/tasks/compliance-liability-mapping.md`.
+
+**Конвейер:**
+
+1. `ViolationHypothesisGenerator` — без LLM, 4 гипотезы: полное неисполнение,
+   нарушение срока, нарушение формы/порядка, нарушение субъектом/полномочий.
+2. `EfCoreLiabilityRetriever` — pgvector `vector(768)` + HNSW, `tsvector('russian')`
+   + GIN, принудительный umbrella-пул общих/бланкетных норм; дедупликация до 30.
+3. `LlmArbiter` — локальная `qwen2.5:14b-instruct-q4_K_M`, `temperature=0`,
+   `response_format=json_object`, батч ≤8 и ≤24 000 символов, 3 попытки
+   (2/4/8 с); каждая попытка пишется в `legal.llm_audit_log`.
+4. `MappingValidator` — только id из пула, `irrelevant` отфильтровывается,
+   `match_degree` отделён от `qualifying_conditions`, score 0..1, спорное →
+   `requires_human_review`.
+
+**API:** `POST /api/liability-mapping/map`, `GET /api/liability-mapping/{dutyId}`.
+Повтор с теми же входами возвращает сохранённый результат по детерминированному
+`run_id`, не дёргая модель и не создавая дубли.
+
+**Особенность:** `legal.liability_norm_chunks.embedding vector(768)` с HNSW;
+миграция требует установленного pgvector >=0.5. На локальном кластере :5433
+расширения нет, поэтому `dotnet ef database update` пока завершается ошибкой с
+`extension "vector" is not available` — это инфраструктурная предпосылка,
+не ошибка кода. В `EIS_STORE=memory` пул пуст и LLM не вызывается.
+
+**Проверки:** `dotnet build` 0 ошибок, `dotnet test --no-build` — 96 passed /
+3 skipped (17 новых).
 
 ---
 
