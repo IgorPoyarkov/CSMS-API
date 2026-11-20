@@ -21,6 +21,8 @@ XSD-валидацию, даже если имя корня совпадает.
 | Контракт / реестр | `contract` | `oos:zfcs_contract2015Type` | 693 |
 | Подписание контракта | `fcsContractSign` | `oos:zfcs_contractSignType` | 1445 |
 | Исполнение контракта | `contractExecution` | `ce:contractExecutionType` | 5802 |
+| Документ о приёмке, большая закупка / ЭА (ЦРК) | `ceContractExecutionDocAcceptance` | `ce:contractExecutionDocAcceptanceType` | 6346 |
+| Документ о приёмке, малая закупка | `cemContractExecutionDocAcceptance` | `ce:contractExecutionDocAcceptanceType` | 5945 |
 | Привлечение СМП (отчёт 238) | `fcsCustomerReportSmallScaleBusiness` | `oos:zfcs_customerReportSmallScaleBusinessType` | 2093 |
 | Изменение контракта | `contractCorrection` | `oos:zfcs_contractCorrection2015Type` | 712 |
 | Отмена контракта | `contractCancel` | `oos:zfcs_contractCancel2015Type` | 730 |
@@ -34,10 +36,30 @@ XSD-валидацию, даже если имя корня совпадает.
 Аналогично `<notificationEF2020>` в превью нет в Альбоме: для извещения ЭА нужен
 `fcsNotificationEF`.
 
+Для документа о приёмке **не** подходит корень `contractExecution`: он несёт
+`ce:contractExecutionType` (сведения об исполнении в целом), а не
+`ce:contractExecutionDocAcceptanceType`. Нужен один из двух корней из таблицы
+выше; выбор зафиксирован в разделе «Приёмка» ниже.
+
 ## Обязательная оболочка `as2PacketType`
 
 Все корни выше наследуют `as2PacketType` (`fcsIntegration.xsd:6567`). Помимо
 `data` пакет обязан содержать `index` со следующими детьми (порядок важен):
+
+### Раскладка пространств имён — проверено валидацией 32 XSD
+
+Корень и `index`/`data` живут в `integration/1`, а тело документа — в своём
+пространстве (`TPtypes/1`, `types/1`, `CPtypes/1`, `CETypes/1`). Рабочая схема:
+префикс пакета (например `p:`) на корне и у `index`/`data`, а `xmlns`
+документа по умолчанию — на корне; тогда дети `data` остаются без префиксов и
+попадают в нужное пространство. Запись `<data xmlns="…/TPtypes/1">` ломает
+валидацию: `data` обязан остаться в `integration/1`.
+
+`schemeVersion="17.0"` — **атрибут элемента `data`**, а не корня пакета. У корня
+атрибутов нет: старая запись `schemeVersion` на `<tenderPlan2020>` была ошибкой
+XSD. Пустая подпись `<signature type="CAdES-BES"></signature>` валидна
+(`xs:base64Binary` допускает нулевую длину) — фальшивую подпись в превью писать
+нельзя, ставится только реальная подпись плагина.
 
 | Путь | Тип / ограничение | Комментарий |
 |---|---|---|
@@ -53,8 +75,32 @@ XSD-валидацию, даже если имя корня совпадает.
 | `index/testCase` | `xs:int`, `minOccurs=0` | номер тестового случая |
 
 Код `objectType` для наших документов: `TP2020` — план-график, `EF` — извещение
-электронного аукциона, `CP` — проект контракта, `CT` — контракт, `OZ` — отчёт
-заказчика.
+электронного аукциона, `CP` — проект контракта, `CT` — контракт, `CRK` — документы
+Целевого реестра контрактов (приёмка), `OZ` — отчёт заказчика. Полный список —
+`BaseTypes.xsd:3462–3525` / комментарий в `fcsIntegration.xsd:6621–6683`.
+
+## Приёмка: выбор корня и обязательные справочники (`Б7`)
+
+Маппер приёмки (`Csms.Infrastructure/AcceptanceXmlMapper.cs`) использует
+`ceContractExecutionDocAcceptance` с `objectType=CRK`: это документ о приёмке
+для большой закупки / электронного аукциона. Корень
+`cemContractExecutionDocAcceptance` — тот же тип данных, но для малой закупки;
+переключение потребуется отдельным решением, когда в домене появится признак
+способы закупки.
+
+Внутри `data` заполняются `docAcceptanceInfo` (тип документа, дата, номер, дата
+приёмки, `fulfilmentSumRUR`, позиции с `fulfilledCost`). Значения, которых нет в
+домене, **не подбираются по названию**:
+
+- `documentType/code` — код из справочника `nsiContractExecutionDoc`;
+- `placer/responsibleOrg/regNum` — код заказчика по СПЗ (11 цифр);
+- `VATRateInfo/VATCode` — код из `nsiVAT`;
+- `OKPD2Info/OKPDCode`, `originCountry/countryCode` — коды из справочников.
+
+Они передаются явным контекстом маппера. Если обязательного значения нет,
+маппер бросает `DomainException` с именем поля вместо «похожего на правильный»
+XML. Это же правило распространяется на `placeholder-v0`: настоящий маппер не
+должен подменять заглушку.
 
 ## Что остаётся открытым
 
