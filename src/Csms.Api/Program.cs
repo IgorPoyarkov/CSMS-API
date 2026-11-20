@@ -156,6 +156,8 @@ builder.Services.AddSingleton<EisPackageService>();
 // переиспользуют тот же экземпляр каталога XSD, что и остальные проверки.
 builder.Services.AddSingleton<AcceptanceXmlMapper>();
 builder.Services.AddSingleton<AcceptanceEisPackageBuilder>();
+builder.Services.AddSingleton<ContractCancelXmlMapper>();
+builder.Services.AddSingleton<ContractCancelEisPackageBuilder>();
 
 builder.Services.AddSingleton<ContractChangeService>();
 builder.Services.AddSingleton<AcceptanceService>();
@@ -256,6 +258,7 @@ app.MapPp2604Endpoints();
 app.MapContractChangeEndpoints();
 app.MapAcceptanceEndpoints();
 app.MapAcceptanceEisPackageEndpoints();
+app.MapContractCancelEisPackageEndpoints();
 app.MapAccessEndpoints();
 
 app.Run();

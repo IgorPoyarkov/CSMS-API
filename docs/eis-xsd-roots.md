@@ -102,6 +102,20 @@ XSD. Пустая подпись `<signature type="CAdES-BES"></signature>` ва
 XML. Это же правило распространяется на `placeholder-v0`: настоящий маппер не
 должен подменять заглушку.
 
+## Аннулирование контракта (`contractCancel`, часть Б10)
+
+Маппер `Csms.Infrastructure/ContractCancelXmlMapper.cs` собирает корень
+`contractCancel` (`fcsIntegration.xsd:730`) с `data` типа
+`oos:zfcs_contractCancel2015Type`. `objectType=CT`, обязательные дети `data` —
+`regNum` (19 цифр из домена), `cancelDate` (`xs:dateTime`), `documentBase`
+(реквизиты документа-основания, до 2000 символов). `currentContractStage=IN`
+фиксирует аннулирование. XML проверяется тем же `EisSchemaCatalog`, что и
+приёмка; источник — подписанное расторжение из `ContractChange`.
+
+Endpoint `POST /api/acceptances/{id}/eis-package` собирает приёмку, а
+`POST /api/contract-changes/{id}/eis-package` — аннулирование. Оба маршрута
+создают обычный `EisPackage` с ссылкой на документ-источник (Б4).
+
 ## Что остаётся открытым
 
 - Схемы ТФФ по 658/215н и 918 в Альбоме 17.0 отсутствуют. Таблица выше

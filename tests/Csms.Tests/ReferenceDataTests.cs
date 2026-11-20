@@ -36,6 +36,45 @@ public sealed class ReferenceDataTests
         Assert.Contains("26.20.11.110", ReferenceImportNormalizer.SerializePayload(clean.Items[0].Payload));
     }
 
+    [Theory]
+    [InlineData("nsiOKEI", "{\"OKEI\":\"796\",\"name\":\"штука\"}", "796", "штука")]
+    [InlineData("nsiOKSM", "{\"OKSM\":\"643\",\"shortName\":\"Россия\"}", "643", "Россия")]
+    [InlineData("nsiOKTMO", "{\"OKTMO\":\"45301000\",\"fullName\":\"Москва\"}", "45301000", "Москва")]
+    [InlineData("nsiKBK", "{\"KBK\":\"00000000000000000\",\"fullName\":\"Доход\"}", "00000000000000000", "Доход")]
+    [InlineData("nsiCurrency", "{\"digitalCode\":\"840\",\"shortName\":\"Доллар США\"}", "840", "Доллар США")]
+    public void Normalizer_Понимает_поля_слабых_справочников(
+        string dataset,
+        string json,
+        string expectedCode,
+        string expectedName)
+    {
+        using var document = JsonDocument.Parse(json);
+        var request = new ReferenceImportRequest(
+            dataset, "1", null, null, null, null,
+            [new ReferenceImportItem(null, null, null, null, document.RootElement)]);
+
+        var clean = ReferenceImportNormalizer.Normalize(request);
+
+        Assert.Equal(expectedCode, clean.Items[0].Code);
+        Assert.Equal(expectedName, clean.Items[0].Name);
+    }
+
+    [Fact]
+    public void Catalog_Описывает_все_датасеты_цепочки_ЕИС()
+    {
+        var codes = ReferenceDatasetCatalog.All.Select(item => item.Code).ToArray();
+
+        Assert.Contains("nsiOKPD2", codes);
+        Assert.Contains("nsiKTRU", codes);
+        Assert.Contains("nsiKLADR", codes);
+        Assert.Contains("nsiOKSM", codes);
+        Assert.Contains("nsiOKTMO", codes);
+        Assert.Contains("nsiKBK", codes);
+        Assert.Contains("nsiOKEI", codes);
+        Assert.Contains("nsiCurrency", codes);
+        Assert.Equal("OKEI", ReferenceDatasetCatalog.CodeFields("nsiOKEI")[0]);
+    }
+
     [Fact]
     public async Task Store_Публикует_версию_и_оставляет_старую_в_истории()
     {

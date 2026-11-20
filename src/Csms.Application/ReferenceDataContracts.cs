@@ -117,6 +117,13 @@ public static class ReferenceImportNormalizer
             throw new ArgumentException("В выгрузке нет записей.");
         }
 
+        // Имена полей различаются по справочникам: у ОКЕИ это OKEI, у стран —
+        // OKSM, у валют — digitalCode. Каталог даёт точный набор, а общие
+        // имена ниже сохраняют совместимость со старыми импортами.
+        var definition = ReferenceDatasetCatalog.Find(request.Dataset);
+        var codeFields = definition?.CodeFields ?? ["code"];
+        var nameFields = definition?.NameFields ?? ["name", "fullName", "shortName"];
+
         var items = new List<ReferenceImportItem>(request.Items.Count);
         foreach (var item in request.Items)
         {
@@ -124,11 +131,17 @@ public static class ReferenceImportNormalizer
                 ? JsonDocument.Parse("{}").RootElement.Clone()
                 : item.Payload.Clone();
 
-            var code = FirstText(item.Code, payload, "code", "OKPD2", "ktruCode", "kladrCode")
-                ?? throw new ArgumentException("У записи выгрузки нет поля code.");
+            var code = FirstText(
+                    item.Code,
+                    payload,
+                    codeFields.Concat(["code", "OKPD2", "ktruCode", "kladrCode"]).ToArray())
+                ?? throw new ArgumentException(
+                    $"У записи выгрузки справочника {request.Dataset} нет поля с кодом.");
             var parent = FirstText(
-                item.ParentCode, payload, "parentCode", "okpd2Code", "OKPD2Code", "OKPD2");
-            var name = FirstText(item.Name, payload, "name", "fullName", "shortName");
+                item.ParentCode,
+                payload,
+                [definition?.ParentCodeField ?? "parentCode", "parentCode", "okpd2Code", "OKPD2Code", "OKPD2"]);
+            var name = FirstText(item.Name, payload, nameFields.ToArray());
 
             items.Add(new ReferenceImportItem(
                 code,

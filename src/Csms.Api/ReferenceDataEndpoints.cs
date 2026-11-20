@@ -21,6 +21,12 @@ public static class ReferenceDataEndpoints
             .Produces<IReadOnlyList<ReferenceDatasetInfo>>()
             .WithSummary("Версии загруженных справочников и их хеши");
 
+        // Ожидаемые коды nsiAllList видны до импорта: фронт не должен гадать,
+        // какие именно справочники поддерживает шлюз (Б6).
+        group.MapGet("/catalog", () => Results.Ok(ReferenceDatasetCatalog.All))
+            .Produces<IReadOnlyList<ReferenceDatasetDefinition>>()
+            .WithSummary("Коды NSI и поля выгрузок, ожидаемые шлюзом");
+
         // Полный активный снимок без payloadJson: нужен фронту, чтобы работать
         // со всеми кодами ОКПД2, а не только с локальной выборкой заказчика.
         group.MapGet("/{dataset}/all", async (
