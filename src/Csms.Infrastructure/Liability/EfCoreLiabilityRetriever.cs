@@ -79,6 +79,14 @@ public sealed class EfCoreLiabilityRetriever(
             hits.Values.Count(hit => hit.TextScore is not null),
             hits.Values.Count(hit => hit.UmbrellaScore is not null));
 
+        if (candidates.Length < LiabilityMappingRules.PreferredCandidates)
+        {
+            logger.LogWarning(
+                "Пул кандидатов duty={Duty}: {Count} норм меньше желаемых {Preferred}",
+                duty.Identifiers.DutyId, candidates.Length,
+                LiabilityMappingRules.PreferredCandidates);
+        }
+
         return candidates;
     }
 
@@ -94,10 +102,11 @@ public sealed class EfCoreLiabilityRetriever(
                 JOIN legal.liability_norms n ON n.id = c.norm_id
                 WHERE n.act_code = @actCode AND n.status = 'in_force'
                 ORDER BY c.embedding <=> CAST(@vector AS vector(768))
-                LIMIT 30
+                LIMIT @limit
                 """,
                 new NpgsqlParameter("vector", vector),
-                new NpgsqlParameter("actCode", actCode))
+                new NpgsqlParameter("actCode", actCode),
+                new NpgsqlParameter("limit", LiabilityMappingRules.VectorCandidateLimit))
             .ToListAsync(cancellationToken);
         return rows.Select(row => new RankHit(row.Id, row.ChunkId, VectorScore: row.Score)).ToArray();
     }
@@ -115,10 +124,11 @@ public sealed class EfCoreLiabilityRetriever(
                 WHERE n.act_code = @actCode AND n.status = 'in_force'
                   AND c.search_tsv @@ websearch_to_tsquery('russian', @query)
                 ORDER BY ts_rank_cd(c.search_tsv, websearch_to_tsquery('russian', @query)) DESC
-                LIMIT 30
+                LIMIT @limit
                 """,
                 new NpgsqlParameter("actCode", actCode),
-                new NpgsqlParameter("query", query))
+                new NpgsqlParameter("query", query),
+                new NpgsqlParameter("limit", LiabilityMappingRules.FullTextCandidateLimit))
             .ToListAsync(cancellationToken);
         return rows.Select(row => new RankHit(row.Id, row.ChunkId, TextScore: row.Score)).ToArray();
     }
@@ -134,9 +144,10 @@ public sealed class EfCoreLiabilityRetriever(
                 WHERE act_code = @actCode AND status = 'in_force'
                   AND norm_type IN ('general', 'blanket')
                 ORDER BY updated_at DESC
-                LIMIT 30
+                LIMIT @limit
                 """,
-                new NpgsqlParameter("actCode", actCode))
+                new NpgsqlParameter("actCode", actCode),
+                new NpgsqlParameter("limit", LiabilityMappingRules.UmbrellaCandidateLimit))
             .ToListAsync(cancellationToken);
         return rows.Select(row => new RankHit(row.Id, row.ChunkId, UmbrellaScore: row.Score)).ToArray();
     }
@@ -200,11 +211,14 @@ public sealed class EfCoreLiabilityRetriever(
 
     private static LiabilityCandidate ToCandidate(NormRow norm, RankHit hit)
     {
-        var score = new[] { hit.VectorScore, hit.TextScore, hit.UmbrellaScore }
-            .Where(value => value is not null)
-            .Select(value => Math.Clamp(value!.Value, 0, 1))
-            .DefaultIfEmpty(0)
-            .Max();
+        // Взвешенная сумма вместо max: норма, найденная и вектором, и FTS,
+        // получает законно более высокий ранг, а umbrella не вытесняет специфичные.
+        var score = Math.Clamp(
+            (hit.VectorScore ?? 0) * LiabilityMappingRules.VectorSearchWeight +
+            (hit.TextScore ?? 0) * LiabilityMappingRules.FullTextSearchWeight +
+            (hit.UmbrellaScore ?? 0) * LiabilityMappingRules.UmbrellaSearchWeight,
+            0,
+            1);
 
         return new LiabilityCandidate(
             norm.LiabilityNodeId,

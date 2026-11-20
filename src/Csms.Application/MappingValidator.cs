@@ -97,7 +97,9 @@ public sealed class MappingValidator : IMappingValidator
 
             if (item.MatchDegree == MatchDegree.Blanket ||
                 (item.MatchDegree == MatchDegree.Partial &&
-                 probability < LiabilityMappingRules.PartialReviewThreshold))
+                 probability < LiabilityMappingRules.PartialReviewThreshold) ||
+                (item.MatchDegree == MatchDegree.Full &&
+                 probability < LiabilityMappingRules.FullReviewThreshold))
             {
                 review = true;
             }

@@ -61,6 +61,8 @@ public sealed class LlmArbiter(
                 attempt,
                 model = options.Model,
                 promptVersion = LiabilityMappingRules.PromptVersion,
+                rulesVersion = LiabilityMappingRules.RulesVersion,
+                configFingerprint = options.BuildConfigFingerprint(),
                 nodeIds = batch.Select(item => item.LiabilityNodeId).ToArray(),
                 userPrompt,
             });
@@ -163,7 +165,7 @@ public sealed class LlmArbiter(
             duty.Identifiers.DutyId,
             "arbiter",
             options.Model,
-            0,
+            options.Temperature,
             LiabilityMappingRules.PromptVersion,
             attempt,
             requestJson,

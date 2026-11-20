@@ -77,6 +77,7 @@ CREATE TABLE legal.mapping_candidates (
     duty_id           text NOT NULL,
     liability_node_id text NOT NULL,
     source            text NOT NULL CHECK (source IN ('vector','fulltext','umbrella','merged')),
+    status            text NOT NULL DEFAULT 'pending',  -- pending | completed
     search_score      double precision NOT NULL,
     rank              integer NOT NULL,
     chunk_id          uuid REFERENCES legal.liability_norm_chunks(id) ON DELETE SET NULL,
@@ -130,12 +131,15 @@ CREATE INDEX ix_duty_liability_review
     ON legal.duty_liability_mappings (requires_human_review, calculated_at DESC);
 ```
 
-**Идемпотентность.** `run_id` — детерминированный UUID из SHA-256 канонического JSON
-`(dutyId, duty fields, sorted candidate node ids, modelVersion, promptVersion)`.
-Повторный запуск с теми же входами находит уже сохранённый `run_id` и возвращает
-сохранённый результат, не вызывая LLM. При новой версии модели/промпта или другом
-пуле `run_id` меняется; upsert по `(duty_id, liability_node_id)`support обновляет
-существующую связь, не создавая дублей.
+**Идемпотентность.** `run_id` — детерминированный UUID из SHA-256 канонического
+JSON с duty, отсортированными id кандидатов, моделью и **всеми** версиями/отпечатками
+(§11). Повторный запуск с теми же входами находит сохранённый `run_id` и
+возвращает результат, не вызывая LLM. При новой версии модели/промпта/правил
+или другом пуле `run_id` меняется; upsert по `(duty_id, liability_node_id)`
+обновляет связь, не создавая дублей. Кандидаты пишутся со статусом `pending`,
+и только `SaveMappingsAsync` выставляет `completed`: прерванный прогон с нулевым
+результатом не выглядит завершённым. `irrelevant` в таблицу связей не попадает,
+но остаётся в `legal.llm_audit_log`.
 
 ## 3. DTO и интерфейсы сервисов
 
@@ -514,3 +518,176 @@ Content-Type: application/json
 `qualifying_conditions` всегда массив (может быть пустым); `irrelevant` в ответе
 API не появляется, но остаётся в `llm_audit_log`; спорные связи приходят с
 `requires_human_review=true`.
+
+## 10. Загрузка КоАП и витрина результата (2026-11-20)
+
+### Источник и загрузчик
+
+Источник — веб-версия КонсультантПлюс,
+`http://www.consultant.ru/document/cons_doc_LAW_34661/` (редакция от 04.08.2026,
+изменения с 03.11.2026). Официальные порталы `pravo.gov.ru` из этой среды
+недоступны; права пользователя на КонсультантПлюс подтверждены. В метаданных
+норм source = `consultant-web`, источник в UI подписан как «КонсультантПлюс
+(веб-версия)», а не как официальный портал.
+
+`tools/KoapImporter` — отдельный .NET-консольный загрузчик:
+
+```powershell
+# разбор TOC и 1138 статей → снимок, без загрузки в БД
+dotnet run --project tools/KoapImporter -- --parse-only
+
+# построение эмбеддингов и запись в legal.*
+dotnet run --project tools/KoapImporter -- --snapshot "$env:TEMP\opencode\koap-norms.json"
+```
+
+Результат полного прогона: **1138 статей → 2871 структурная единица**
+(2812 частей, 59 статей без нумерованных частей), **3303 чанка**, у каждого
+768-мерный вектор `nomic-embed-text`. Повторный запуск идемпотентен:
+`ON CONFLICT (act_code, act_version, liability_node_id)` для норм и
+`(norm_id, chunk_index)` для чанков; старые чанки нормы удаляются.
+
+Регистрация модели в локальном Ollama (реестр `registry.ollama.ai` из этой
+среды недоступен, поэтому GGUF скачан с HuggingFace):
+
+```powershell
+ollama create nomic-embed-text -f "$env:TEMP\opencode\ollama-nomic\Modelfile"
+```
+
+`Modelfile`: `FROM .../nomic-embed-text-v1.5.Q4_K_M.gguf`,
+`PARAMETER num_ctx 8192`. Проверено: `POST /api/embed` возвращает 768 чисел.
+
+### Миграции и исправления
+
+- `20261120120000_AddMappingNormReference` — добавляет недостающую колонку
+  `norm_reference` в `legal.duty_liability_mappings` и backfill из
+  `legal.liability_norms`. Без неё `GetResultAsync` падал при чтении связи.
+- `20261120130000_AddMappingRunStatus` — статус `completed` в
+  `legal.mapping_candidates`. Пустой прогон не оставляет связей, поэтому
+  отдельный маркер нужен для идемпотентности: повтор не вызывает арбитра и
+  возвращает честный результат с пустым списком и `requires_human_review=true`.
+- В `EfCoreLiabilityMappingStore` скалярные `SqlQueryRaw<T>` получили явный
+  псевдоним `AS "Value"`; все `ExecuteSqlRawAsync` получили массив параметров и
+  отдельный `CancellationToken` (иначе EF Core 9 интерпретировал токен как
+  параметр SQL и падал с «нет mapping для CancellationToken»).
+
+### Витрина на фронтенде
+
+- API: `GET /api/liability-mapping/duties` — 41 обязанность 158н, уже
+  приведённая к `DutyInput`; `GET /api/liability-mapping/overview` — сводка
+  (есть ли результат, число кандидатов/норм/проверок, верхняя норма).
+- `csms/src/services/LiabilityMapping/` —axios-клиент (dev через Vite-прокси
+  `/api → :5099`, timeout 900 с) и Zod-схемы точного контракта.
+- `csms/src/components/LiabilityMapping/LiabilityMappingPage.tsx` — страница
+  `/liability-mapping`: слева фильтруемый список 41 пункта 158н, справа гипотезы,
+  нормы КоАП, degree/score, условия ответственности и пометки юриста. Кнопка
+  «Сопоставить с КоАП» берёт `DutyInput` из того же API и запускает конвейер.
+  Ссылки добавлены в `Header.tsx` и на главную (`Main.tsx`).
+
+### Важное про запуск
+
+`dotnet run` для API нужно запускать **с launch profile** (по умолчанию): в
+`launchSettings.json` задана строка подключения к `csms_eis` на :5433. Вариант
+`--no-launch-profile` без `ConnectionStrings:EisDb` падает сразу. Для полного
+конвейера обязательны PostgreSQL :5433, Ollama :11434 и `EIS_STORE=postgres`.
+
+### Проверки
+
+`dotnet build` — успешно; `dotnet test --no-build` — 100 passed / 3 skipped.
+На клиенте `npx tsc -b`, `npx oxlint src` и `npx vite build` проходят: oxlint
+выдаёт только предупреждения, Vite — предупреждения о Sass `@import`, размере
+чанков и путях шрифтов.
+
+## 11. Настраиваемый и версионируемый конвейер (2026-11-20)
+
+Изначально `run_id` зависел только от duty, пула кандидатов и модели. Из-за
+этого правка порогов или промпта не создавала новый прогон: старый результат
+считался актуальным. Теперь в ключ запуска входят **все** управляемые параметры.
+
+### Версии
+
+| Константа/настройка | Значение | Где |
+|---|---|---|
+| `PromptVersion` | `liability-arbiter-v2` | `LiabilityMappingRules.cs` |
+| `RulesVersion` | `liability-rules-v2` | `LiabilityMappingRules.cs` |
+| `HypothesesVersion` | `liability-hypotheses-v2` | `LiabilityMappingRules.cs` |
+| `ConfigVersion` | `liability-config-v3` | `appsettings.json`, секция `LiabilityMapping` |
+
+`BuildRunId` хэширует duty, отсортированные id кандидатов, модель, все версии,
+`BuildRulesFingerprint()` (пороги, размеры пула, веса) и
+`options.BuildConfigFingerprint()` (модель, эмбеддинги, температура, токены,
+ретраи). Любая правка параметра даёт новый `run_id`, старые результаты
+остаются в истории. `rulesVersion`/`configFingerprint` пишутся в запрос арбитра
+в `legal.llm_audit_log`, температура — отдельной колонкой аудита.
+
+### Что уточнено
+
+- **Промпт v2:** пороги подставляются из `LiabilityMappingRules`, добавлена
+  калибровка оценок: `full` 0.85–1.00, `partial` 0.50–0.84, `blanket` 0.20–0.60
+  (бланкетная норма больше не получает 0 без оснований), `irrelevant` 0.
+  Явно требуется оценка каждого id батча, цитата из текста нормы и ссылка на id
+  гипотезы; усечённый текст не повышает оценку.
+- **Пороги:** `LowProbabilityThreshold=0.5`, `PartialReviewThreshold=0.7`,
+  новый `FullReviewThreshold=0.8`. Бланкетные нормы по-прежнему всегда идут
+  на ручную проверку.
+- **Гипотезы:** 4 гипотезы сохранены по ТЗ (3–4), но переупорядочены — действия
+  (порядок/форма, срок, субъект) идут первыми, бездействие последним: в
+  практике 158н преобладают нарушения при совершении действия. Бездействие не
+  удалено из-за составов вроде ч. 2 ст. 19.5.
+- **Пул:** лимиты источников вынесены в константы (вектор 24, FTS 18, umbrella
+  6, итого максимум 30) и передаются в SQL параметрами. Ранг считается
+  взвешенной суммой 0.65 / 0.35 / 0.5 вместо max, поэтому umbrella не
+  вытесняет специфичные нормы. При пуле меньше 25 пишется предупреждение.
+- **Модель:** `Temperature` (по умолчанию 0), `MaxOutputTokens=4096`,
+  `ContextTokens=8192` (`num_ctx`), `MaxRetries=2`, `RetryBaseDelayMs`,
+  `EmbeddingModel=nomic-embed-text`, таймаут 900 с. Арбитр —
+  `qwen2.5:14b-instruct-q4_K_M`. Все параметры задаются в `appsettings.json`
+  и попадают в отпечаток. Нулевая температура остаётся значением по умолчанию
+  для воспроизводимости; исчерпание ретраев уходит в ручную проверку.
+- **Аудит:** невалидный/усечённый ответ LLM больше не роняет запись в
+  `legal.llm_audit_log`: не-JSON сохраняется как строка. Каждая попытка пишется
+  в аудит отдельной строкой с `attempt`, версиями и температурой.
+- **Режим хранилища:** при `EIS_STORE=memory` регистрируется
+  `EmptyLiabilityRetriever` — эндпоинт отвечает, но кандидатов нет. Живой
+  прогон требует `EIS_STORE=postgres` (PostgreSQL 5433 + pgvector).
+
+### Проверки
+
+`dotnet build` — 0 ошибок; `dotnet test --no-build` — **103 passed / 3 skipped**
+(добавлены тесты промпта, порога full, версионности ключа и отпечатка настроек).
+Проверка выполнялась в чистом worktree: в основной копии в это время были чужие
+незакоммиченные файлы `ContractChange*.cs` с ошибками `CS1739`.
+
+## 12. Живой прогон v3 (2026-11-20)
+
+Контур: PostgreSQL `:5433` (схема `legal`, pgvector), Ollama `:11434`,
+`EIS_STORE=postgres`, `csms-api :5099`. В базу загружен КоАП: 1138 статей в TOC,
+2871 структурная единица (2812 частей), 3303 чанка с эмбеддингами
+`nomic-embed-text` (768 измерений) в `legal.liability_norm_chunks`.
+
+Прогон для обязанности `158n-3-1-1`:
+
+| Поле | Значение |
+|---|---|
+| `run_id` | `91baaa0c-5f97-bc16-6b56-060e48fd04f3` |
+| `candidate_count` | 29 (порог предупреждения 25) |
+| `matched_liabilities` | 1 — «КоАП РФ ст. 2.9.1 ч. 1», `blanket` |
+| `probability_score` | 0.5, `requires_human_review = true` |
+| `model_version` | `qwen2.5:14b-instruct-q4_K_M` |
+| `prompt_version` | `liability-arbiter-v2` |
+| `calculated_at` | `2026-11-20T06:11:47.5552543+00:00` |
+
+Бланкетная норма сохранена и отправлена на ручную проверку, как и требует
+п. 1–5 §1. Старые прогоны остались в истории: `a744d527…` (корректный v2,
+30 кандидатов, `probability_score=0`), `7c2f5690…` (обрезанный JSON арбитра),
+`976b5470…` (`????` в гипотезах из-за не-UTF8 body запроса).
+
+## 13. ПП РФ № 2604 и ОКПД2 (связь с фронтендом)
+
+Предельные величины значимости из приложения № 2 ПП РФ № 2604 проверяются на
+клиенте (`src/services/BidEvaluation/bidEvaluation.schema.ts`). Источник —
+только официальное опубликование: `publication.pravo.gov.ru`,
+`eoNumber=0001202201040005`, PDF стр. 27–29. Подробная таблица
+«код ОКПД2 → позиция приложения» с признаками `classifier` / `purpose` /
+`residual`, случаями `unmatched` / `conflict` / `needsReview` и всеми оговорками
+— в `csms/docs/tasks/pp2604-okpd2-limits.md`. Ключевой факт: **в приложении № 2
+нет кодов ОКПД2**, поэтому каждая связь является выводимой и несёт источник.

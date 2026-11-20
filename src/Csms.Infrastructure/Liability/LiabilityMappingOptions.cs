@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Csms.Infrastructure.Liability;
 
 /// <summary>
@@ -21,13 +23,44 @@ public sealed class LiabilityMappingOptions
     public int TimeoutSeconds { get; set; } = 900;
 
     /// <summary>Максимум выходных токенов арбитра.</summary>
-    public int MaxOutputTokens { get; set; } = 2048;
+    public int MaxOutputTokens { get; set; } = 4096;
+
+    /// <summary>
+    /// Размер контекста Ollama: промпт с 4 гипотезами и 8 нормами вместе с
+    /// требованием цитат легко выходит за стандартные 4096 токенов.
+    /// </summary>
+    public int ContextTokens { get; set; } = 8192;
 
     /// <summary>Дополнительные попытки после первой (итого 1 + MaxRetries).</summary>
     public int MaxRetries { get; set; } = 2;
 
     /// <summary>Базовая задержка экспоненциального retry, миллисекунды.</summary>
     public int RetryBaseDelayMs { get; set; } = 2000;
+
+    /// <summary>
+    /// Температура арбитра. По умолчанию 0 — иначе один и тот же пул даёт
+    /// воспроизводимую оценку; ненулевое значение допустимо для экспериментов
+    /// и обязательно попадает в ключ запуска.
+    /// </summary>
+    public double Temperature { get; set; }
+
+    /// <summary>
+    /// Версия конфигурации конвейера. Увеличивать при ручном изменении
+    /// настроек, которые не отражены в остальных полях отпечатка.
+    /// </summary>
+    public string ConfigVersion { get; set; } = "liability-config-v3";
+
+    /// <summary>Стабильный отпечаток настроек модели для ключа запуска.</summary>
+    public string BuildConfigFingerprint() =>
+        string.Join('|',
+            ConfigVersion,
+            Model,
+            EmbeddingModel,
+            Temperature.ToString("0.00", CultureInfo.InvariantCulture),
+            MaxOutputTokens,
+            ContextTokens,
+            MaxRetries,
+            RetryBaseDelayMs);
 
     public void Validate()
     {
@@ -56,9 +89,24 @@ public sealed class LiabilityMappingOptions
             throw new InvalidOperationException("LiabilityMapping:MaxOutputTokens должен быть 256..16384.");
         }
 
+        if (ContextTokens is < 2048 or > 32_768)
+        {
+            throw new InvalidOperationException("LiabilityMapping:ContextTokens должен быть 2048..32768.");
+        }
+
         if (MaxRetries is < 0 or > 4)
         {
             throw new InvalidOperationException("LiabilityMapping:MaxRetries должен быть 0..4.");
+        }
+
+        if (Temperature is < 0 or > 1)
+        {
+            throw new InvalidOperationException("LiabilityMapping:Temperature должен быть 0..1.");
+        }
+
+        if (string.IsNullOrWhiteSpace(ConfigVersion))
+        {
+            throw new InvalidOperationException("LiabilityMapping:ConfigVersion не задана.");
         }
     }
 }

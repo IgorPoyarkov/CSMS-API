@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -8,13 +9,29 @@ namespace Csms.Application;
 public static class LiabilityMappingRules
 {
     /// <summary>Версия системного промпта арбитра — входит в ключ запуска и в БД.</summary>
-    public const string PromptVersion = "liability-arbiter-v1";
+    public const string PromptVersion = "liability-arbiter-v2";
+
+    /// <summary>
+    /// Версия правил retriever/валидатора. Отдельная от промпта: смена порогов
+    /// или весов тоже должна создавать новый run_id, иначе старый результат
+    /// будет считаться актуальным.
+    /// </summary>
+    public const string RulesVersion = "liability-rules-v2";
+
+    /// <summary>
+    /// Версия набора гипотез. Увеличивать при добавлении/правке ViolationKind
+    /// или текста генератора: гипотезы уходят в промпт и в результат.
+    /// </summary>
+    public const string HypothesesVersion = "liability-hypotheses-v2";
 
     /// <summary>Ниже этой вероятности решение считается низкоуверенным.</summary>
-    public const double LowProbabilityThreshold = 0.65;
+    public const double LowProbabilityThreshold = 0.5;
 
     /// <summary>Частичное совпадение ниже этой вероятности уходит на ручную проверку.</summary>
-    public const double PartialReviewThreshold = 0.75;
+    public const double PartialReviewThreshold = 0.7;
+
+    /// <summary>Полное совпадение ниже этой вероятности тоже проверяется юристом.</summary>
+    public const double FullReviewThreshold = 0.8;
 
     /// <summary>Максимум кандидатов в пуле (требование 25–30).</summary>
     public const int MaxCandidates = 30;
@@ -22,11 +39,46 @@ public static class LiabilityMappingRules
     /// <summary>Минимально желательный размер пула для высокого recall.</summary>
     public const int PreferredCandidates = 25;
 
+    /// <summary>Ограничения источников: общие нормы не вытесняют специфичные.</summary>
+    public const int VectorCandidateLimit = 24;
+    public const int FullTextCandidateLimit = 18;
+    public const int UmbrellaCandidateLimit = 6;
+
+    /// <summary>Веса при слиянии оценок retriever'а.</summary>
+    public const double VectorSearchWeight = 0.65;
+    public const double FullTextSearchWeight = 0.35;
+    public const double UmbrellaSearchWeight = 0.5;
+
+    /// <summary>
+    /// Отпечаток всех правил, влияющих на вывод. Входит в run_id: правка любого
+    /// порога/веса автоматически создаёт новую версию прогона.
+    /// </summary>
+    public static string BuildRulesFingerprint() =>
+        string.Join('|',
+            PromptVersion,
+            RulesVersion,
+            HypothesesVersion,
+            Number(LowProbabilityThreshold),
+            Number(PartialReviewThreshold),
+            Number(FullReviewThreshold),
+            MaxCandidates,
+            PreferredCandidates,
+            VectorCandidateLimit,
+            FullTextCandidateLimit,
+            UmbrellaCandidateLimit,
+            Number(VectorSearchWeight),
+            Number(FullTextSearchWeight),
+            Number(UmbrellaSearchWeight));
+
+    private static string Number(double value) =>
+        value.ToString("0.00", CultureInfo.InvariantCulture);
+
     /// <summary>Ключ запуска: одинаковые входы дают одинаковый run_id.</summary>
     public static Guid BuildRunId(
         DutyInput duty,
         IReadOnlyList<LiabilityCandidate> candidates,
-        string modelVersion)
+        string modelVersion,
+        string configFingerprint = "")
     {
         var nodeIds = candidates
             .Select(candidate => candidate.LiabilityNodeId)
@@ -45,7 +97,11 @@ public static class LiabilityMappingRules
             actCode = duty.LiabilityActCode,
             nodeIds,
             modelVersion,
-            promptVersion = PromptVersion
+            promptVersion = PromptVersion,
+            rulesVersion = RulesVersion,
+            hypothesesVersion = HypothesesVersion,
+            rules = BuildRulesFingerprint(),
+            configFingerprint
         };
 
         var json = JsonSerializer.Serialize(canonical);

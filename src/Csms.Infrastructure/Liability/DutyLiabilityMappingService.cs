@@ -28,7 +28,34 @@ public sealed class DutyLiabilityMappingService(
 
         var hypotheses = hypothesisGenerator.Generate(duty);
         var candidates = await retriever.RetrieveAsync(duty, hypotheses, cancellationToken);
-        var runId = LiabilityMappingRules.BuildRunId(duty, candidates, options.Model);
+        var runId = LiabilityMappingRules.BuildRunId(
+            duty, candidates, options.Model, options.BuildConfigFingerprint());
+
+        // Пустой результат не оставляет строк в duty_liability_mappings, поэтому
+        // одной проверки GetResultAsync недостаточно: completed-run маркер в
+        // mapping_candidates фиксирует даже успешный прогон без совпадений.
+        if (await store.HasCompletedRunAsync(runId, cancellationToken))
+        {
+            var completed = await store.GetResultAsync(runId, duty.Identifiers.DutyId, cancellationToken);
+            if (completed is not null)
+            {
+                logger.LogInformation(
+                    "run={Run} уже завершён, возвращаем сохранённый результат ({Count} норм)",
+                    runId, completed.MatchedNorms.Count);
+                return completed;
+            }
+
+            return new LiabilityMappingResult(
+                duty.Identifiers.DutyId,
+                runId,
+                hypotheses,
+                [],
+                candidates.Count,
+                options.Model,
+                LiabilityMappingRules.PromptVersion,
+                DateTimeOffset.UtcNow,
+                true);
+        }
 
         var cached = await store.GetResultAsync(runId, duty.Identifiers.DutyId, cancellationToken);
         if (cached is not null)

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Csms.Application;
@@ -22,15 +23,40 @@ public sealed class ComplianceLiabilityMappingTests
         Assert.Equal(
             new[]
             {
-                ViolationKind.Omission,
-                ViolationKind.DeadlineViolation,
                 ViolationKind.ProcedureOrFormViolation,
+                ViolationKind.DeadlineViolation,
                 ViolationKind.SubjectOrAuthorityViolation,
+                ViolationKind.Omission,
             },
             hypotheses.Select(item => item.Kind));
         Assert.All(hypotheses, item => Assert.Equal(duty.Identifiers.DutyId, item.DutyId));
-        Assert.Contains("не совершил", hypotheses[0].Text);
+        Assert.Contains("порядка", hypotheses[0].Text);
         Assert.Contains("срока", hypotheses[1].Text);
+        Assert.Contains("не совершил", hypotheses[3].Text);
+    }
+
+    [Fact]
+    public void Промпт_содержит_актуальные_пороги_и_калибровку_оценок()
+    {
+        var systemPrompt = LiabilityArbiterPrompts.SystemPrompt;
+        foreach (var threshold in new[]
+                 {
+                     LiabilityMappingRules.LowProbabilityThreshold,
+                     LiabilityMappingRules.PartialReviewThreshold,
+                     LiabilityMappingRules.FullReviewThreshold,
+                 })
+        {
+            Assert.Contains(
+                threshold.ToString("0.00", CultureInfo.InvariantCulture),
+                systemPrompt);
+        }
+
+        Assert.Contains("blanket: 0.20–0.60", systemPrompt);
+
+        var userPrompt = LiabilityArbiterPrompts.BuildUserPrompt(
+            CreateDuty(), CreateHypotheses(), [Candidate("n1")]);
+        Assert.Contains("evaluation_rules", userPrompt);
+        Assert.Contains(LiabilityMappingRules.RulesVersion, userPrompt);
     }
 
     [Fact]
@@ -69,6 +95,17 @@ public sealed class ComplianceLiabilityMappingTests
         var match = Assert.Single(outcome.Accepted);
         Assert.Equal(MatchDegree.Blanket, match.MatchDegree);
         Assert.True(match.RequiresHumanReview);
+    }
+
+    [Fact]
+    public void Валидатор_направляет_на_проверку_полное_совпадение_с_низкой_оценкой()
+    {
+        var candidates = new[] { Candidate("n1") };
+        var response = new LlmArbiterResponse([Item("n1", MatchDegree.Full, 0.7)]);
+
+        var outcome = new MappingValidator().Validate(response, candidates);
+
+        Assert.True(Assert.Single(outcome.Accepted).RequiresHumanReview);
     }
 
     [Fact]
@@ -296,10 +333,36 @@ public sealed class ComplianceLiabilityMappingTests
         var otherModel = LiabilityMappingRules.BuildRunId(duty, candidates, "model-v2");
         var otherPool = LiabilityMappingRules.BuildRunId(
             duty, [Candidate("n1")], "model-v1");
+        var otherConfig = LiabilityMappingRules.BuildRunId(
+            duty, candidates, "model-v1", "config-v2");
 
         Assert.Equal(first, second);
         Assert.NotEqual(first, otherModel);
         Assert.NotEqual(first, otherPool);
+        Assert.NotEqual(first, otherConfig);
+        Assert.Contains(LiabilityMappingRules.RulesVersion, LiabilityMappingRules.BuildRulesFingerprint());
+    }
+
+    [Fact]
+    public void Отпечаток_настроек_реагирует_на_все_параметры_модели()
+    {
+        var options = new LiabilityMappingOptions { Model = "fake-model" };
+        var previous = options.BuildConfigFingerprint();
+
+        options.Temperature = 0.1;
+        Assert.NotEqual(previous, options.BuildConfigFingerprint());
+        previous = options.BuildConfigFingerprint();
+
+        options.MaxOutputTokens = 8192;
+        Assert.NotEqual(previous, options.BuildConfigFingerprint());
+        previous = options.BuildConfigFingerprint();
+
+        options.ContextTokens = 16384;
+        Assert.NotEqual(previous, options.BuildConfigFingerprint());
+        previous = options.BuildConfigFingerprint();
+
+        options.ConfigVersion = "liability-config-v4";
+        Assert.NotEqual(previous, options.BuildConfigFingerprint());
     }
 
     [Fact]

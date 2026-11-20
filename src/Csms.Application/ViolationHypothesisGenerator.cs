@@ -20,13 +20,18 @@ public sealed class ViolationHypothesisGenerator : IViolationHypothesisGenerator
             ? string.Empty
             : $" Условие: {duty.Condition.Trim()}.";
 
+        // Порядок гипотез существен: действия идут первыми — основная масса
+        // нарушений по 158н связана с ненадлежащим исполнением, а не с
+        // полным бездействием. Бездействие сохранено последним: часть составов
+        // КоАП (например, ч. 2 ст. 19.5) построена именно на неисполнении.
         return
         [
             new ViolationHypothesis(
                 "h1",
-                ViolationKind.Omission,
-                $"Полное неисполнение или бездействие: {subject} не совершил(а) действие «{action}» " +
-                $"в отношении {objectText}.{condition}",
+                ViolationKind.ProcedureOrFormViolation,
+                $"Нарушение порядка, формы или состава сведений при совершении действия: " +
+                $"{subject} исполнил(а) «{action}» в отношении {objectText} с нарушением " +
+                $"установленного порядка, формы или в неполном составе сведений.{condition}",
                 dutyId),
             new ViolationHypothesis(
                 "h2",
@@ -36,16 +41,16 @@ public sealed class ViolationHypothesisGenerator : IViolationHypothesisGenerator
                 dutyId),
             new ViolationHypothesis(
                 "h3",
-                ViolationKind.ProcedureOrFormViolation,
-                $"Нарушение порядка, формы или состава сведений: {subject} исполнил(а) «{action}» " +
-                $"в отношении {objectText} с нарушением установленного порядка, формы или неполного состава сведений.{condition}",
-                dutyId),
-            new ViolationHypothesis(
-                "h4",
                 ViolationKind.SubjectOrAuthorityViolation,
                 $"Нарушение субъектом или превышение полномочий: действие «{action}» в отношении " +
                 $"{objectText} совершено лицом, не уполномоченным либо с превышением полномочий " +
                 $"(должен был действовать {subject}).{condition}",
+                dutyId),
+            new ViolationHypothesis(
+                "h4",
+                ViolationKind.Omission,
+                $"Полное неисполнение или бездействие: {subject} не совершил(а) действие «{action}» " +
+                $"в отношении {objectText}.{condition}",
                 dutyId),
         ];
     }

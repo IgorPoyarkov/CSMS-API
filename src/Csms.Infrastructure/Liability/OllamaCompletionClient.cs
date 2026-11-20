@@ -7,8 +7,9 @@ namespace Csms.Infrastructure.Liability;
 
 /// <summary>
 /// Вызов локального арбитра через OpenAI-совместимый эндпоинт Ollama.
-/// Температура зафиксирована на нуле: один и тот же пул должен давать
+/// Температура по умолчанию равна нулю: один и тот же пул должен давать
 /// воспроизводимую оценку, иначе идемпотентность run_id теряет смысл.
+/// Любая смена температуры попадает в отпечаток конфигурации и в аудит.
 /// </summary>
 public sealed class OllamaCompletionClient(
     LiabilityMappingOptions options,
@@ -25,12 +26,14 @@ public sealed class OllamaCompletionClient(
         string userPrompt,
         CancellationToken cancellationToken = default)
     {
+        var contextTokens = options.ContextTokens;
         var payload = new
         {
             model = options.Model,
-            temperature = 0,
+            temperature = options.Temperature,
             stream = false,
             max_tokens = options.MaxOutputTokens,
+            options = new { num_ctx = contextTokens },
             response_format = new { type = "json_object" },
             messages = new object[]
             {

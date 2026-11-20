@@ -20,7 +20,14 @@ public sealed class EfCoreLiabilityMappingStore(
     {
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         var count = await context.Database.SqlQueryRaw<int>(
-                "SELECT COUNT(*)::int FROM legal.duty_liability_mappings WHERE run_id = @runId",
+                """
+                SELECT COUNT(*)::int AS "Value" FROM (
+                    SELECT 1 FROM legal.duty_liability_mappings WHERE run_id = @runId
+                    UNION
+                    SELECT 1 FROM legal.mapping_candidates
+                    WHERE run_id = @runId AND status = 'finalized'
+                ) completed
+                """,
                 new NpgsqlParameter("runId", runId))
             .SingleAsync(cancellationToken);
         return count > 0;
@@ -37,8 +44,11 @@ public sealed class EfCoreLiabilityMappingStore(
 
         await context.Database.ExecuteSqlRawAsync(
             "DELETE FROM legal.mapping_candidates WHERE run_id = @runId AND duty_id = @dutyId",
-            new NpgsqlParameter("runId", runId),
-            new NpgsqlParameter("dutyId", dutyId),
+            new object[]
+            {
+                new NpgsqlParameter("runId", runId),
+                new NpgsqlParameter("dutyId", dutyId),
+            },
             cancellationToken);
 
         for (var index = 0; index < candidates.Count; index++)
@@ -47,21 +57,27 @@ public sealed class EfCoreLiabilityMappingStore(
             await context.Database.ExecuteSqlRawAsync(
                 """
                 INSERT INTO legal.mapping_candidates
-                    (id, run_id, duty_id, liability_node_id, source, search_score, rank, chunk_id, payload)
+                    (id, run_id, duty_id, liability_node_id, source, search_score, rank, chunk_id, payload, status)
                 VALUES
                     (@id, @runId, @dutyId, @nodeId, @source, @score, @rank,
-                     CAST(@chunkId AS uuid), CAST(@payload AS jsonb))
+                     CAST(@chunkId AS uuid), CAST(@payload AS jsonb), @status)
                 """,
-                new NpgsqlParameter("id", Guid.NewGuid()),
-                new NpgsqlParameter("runId", runId),
-                new NpgsqlParameter("dutyId", dutyId),
-                new NpgsqlParameter("nodeId", candidate.LiabilityNodeId),
+                new object[]
+                {
+                    new NpgsqlParameter("id", Guid.NewGuid()),
+                    new NpgsqlParameter("runId", runId),
+                    new NpgsqlParameter("dutyId", dutyId),
+                    new NpgsqlParameter("nodeId", candidate.LiabilityNodeId),
                 new NpgsqlParameter("source", SourceToString(candidate.Source)),
                 new NpgsqlParameter("score", candidate.SearchScore),
                 new NpgsqlParameter("rank", index),
                 new NpgsqlParameter("chunkId", (object?)candidate.ChunkId ?? DBNull.Value),
                 new NpgsqlParameter("payload", JsonSerializer.Serialize(candidate, JsonOptions)),
-                cancellationToken);
+                // кандидаты считаются сохранёнными, но не завершёнными: маркер
+                // finalized выставляется только после успешного arbiter+validator
+                new NpgsqlParameter("status", "pending"),
+            },
+            cancellationToken);
         }
 
         await transaction.CommitAsync(cancellationToken);
@@ -107,9 +123,12 @@ public sealed class EfCoreLiabilityMappingStore(
             WHERE duty_id = @dutyId
               AND NOT (liability_node_id = ANY(@nodeIds))
             """,
-            new NpgsqlParameter("dutyId", result.DutyId),
-            new NpgsqlParameter("nodeIds", result.MatchedNorms
-                .Select(match => match.LiabilityNodeId).ToArray()),
+            new object[]
+            {
+                new NpgsqlParameter("dutyId", result.DutyId),
+                new NpgsqlParameter("nodeIds", result.MatchedNorms
+                    .Select(match => match.LiabilityNodeId).ToArray()),
+            },
             cancellationToken);
 
         var hypothesesJson = JsonSerializer.Serialize(result.Hypotheses, JsonOptions);
@@ -118,17 +137,18 @@ public sealed class EfCoreLiabilityMappingStore(
             await context.Database.ExecuteSqlRawAsync(
                 """
                 INSERT INTO legal.duty_liability_mappings
-                    (id, run_id, duty_id, liability_node_id, match_degree, probability_score,
+                    (id, run_id, duty_id, liability_node_id, norm_reference, match_degree, probability_score,
                      qualifying_conditions, sanction_summary, legal_reasoning,
                      requires_human_review, hypotheses, model_version, prompt_version,
                      audit_id, calculated_at)
                 VALUES
-                    (@id, @runId, @dutyId, @nodeId, @degree, @score,
+                    (@id, @runId, @dutyId, @nodeId, @reference, @degree, @score,
                      CAST(@conditions AS jsonb), @sanction, @reasoning,
                      @review, CAST(@hypotheses AS jsonb), @model, @prompt,
                      NULL, @calculatedAt)
                 ON CONFLICT (duty_id, liability_node_id) DO UPDATE SET
                     run_id = EXCLUDED.run_id,
+                    norm_reference = EXCLUDED.norm_reference,
                     match_degree = EXCLUDED.match_degree,
                     probability_score = EXCLUDED.probability_score,
                     qualifying_conditions = EXCLUDED.qualifying_conditions,
@@ -140,10 +160,13 @@ public sealed class EfCoreLiabilityMappingStore(
                     prompt_version = EXCLUDED.prompt_version,
                     calculated_at = EXCLUDED.calculated_at
                 """,
+                new object[]
+                {
                 new NpgsqlParameter("id", Guid.NewGuid()),
                 new NpgsqlParameter("runId", runId),
                 new NpgsqlParameter("dutyId", result.DutyId),
                 new NpgsqlParameter("nodeId", match.LiabilityNodeId),
+                new NpgsqlParameter("reference", match.NormReference),
                 new NpgsqlParameter("degree", match.MatchDegree.ToString().ToLowerInvariant()),
                 new NpgsqlParameter("score", match.ProbabilityScore),
                 new NpgsqlParameter("conditions", JsonSerializer.Serialize(match.QualifyingConditions, JsonOptions)),
@@ -154,8 +177,25 @@ public sealed class EfCoreLiabilityMappingStore(
                 new NpgsqlParameter("model", result.ModelVersion),
                 new NpgsqlParameter("prompt", result.PromptVersion),
                 new NpgsqlParameter("calculatedAt", result.CalculatedAt.UtcDateTime),
+                },
                 cancellationToken);
         }
+
+        // Пустой результат тоже завершён: mappings не оставляет строк, поэтому
+        // именно здесь выставляется маркер идемпотентности. Прерванный прогон
+        // остаётся в статусе pending и будет перезапущен повторным запросом.
+        await context.Database.ExecuteSqlRawAsync(
+            """
+            UPDATE legal.mapping_candidates
+               SET status = 'finalized'
+             WHERE run_id = @runId AND duty_id = @dutyId
+            """,
+            new object[]
+            {
+                new NpgsqlParameter("runId", runId),
+                new NpgsqlParameter("dutyId", result.DutyId),
+            },
+            cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
     }
@@ -206,7 +246,7 @@ public sealed class EfCoreLiabilityMappingStore(
 
         var candidateCount = await context.Database.SqlQueryRaw<int>(
                 """
-                SELECT COUNT(*)::int FROM legal.mapping_candidates
+                SELECT COUNT(*)::int AS "Value" FROM legal.mapping_candidates
                 WHERE run_id = @runId AND duty_id = @dutyId
                 """,
                 new NpgsqlParameter("runId", runId),
@@ -232,7 +272,7 @@ public sealed class EfCoreLiabilityMappingStore(
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         var runId = await context.Database.SqlQueryRaw<string>(
                 """
-                SELECT run_id::text FROM legal.duty_liability_mappings
+                SELECT run_id::text AS "Value" FROM legal.duty_liability_mappings
                 WHERE duty_id = @dutyId
                 ORDER BY calculated_at DESC
                 LIMIT 1
@@ -258,21 +298,44 @@ public sealed class EfCoreLiabilityMappingStore(
                  @promptVersion, @attempt, CAST(@request AS jsonb), CAST(@response AS jsonb),
                  @error, @duration, @validation, @createdAt)
             """,
-            new NpgsqlParameter("id", entry.Id),
-            new NpgsqlParameter("runId", entry.RunId),
-            new NpgsqlParameter("dutyId", entry.DutyId),
-            new NpgsqlParameter("stage", entry.Stage),
-            new NpgsqlParameter("model", entry.Model),
-            new NpgsqlParameter("temperature", entry.Temperature),
-            new NpgsqlParameter("promptVersion", entry.PromptVersion),
-            new NpgsqlParameter("attempt", entry.Attempt),
-            new NpgsqlParameter("request", entry.RequestJson),
-            new NpgsqlParameter("response", (object?)entry.ResponseJson ?? DBNull.Value),
-            new NpgsqlParameter("error", (object?)entry.ErrorText ?? DBNull.Value),
-            new NpgsqlParameter("duration", entry.DurationMs),
-            new NpgsqlParameter("validation", entry.ValidationResult),
-            new NpgsqlParameter("createdAt", entry.CreatedAt.UtcDateTime),
+            new object[]
+            {
+                new NpgsqlParameter("id", entry.Id),
+                new NpgsqlParameter("runId", entry.RunId),
+                new NpgsqlParameter("dutyId", entry.DutyId),
+                new NpgsqlParameter("stage", entry.Stage),
+                new NpgsqlParameter("model", entry.Model),
+                new NpgsqlParameter("temperature", entry.Temperature),
+                new NpgsqlParameter("promptVersion", entry.PromptVersion),
+                new NpgsqlParameter("attempt", entry.Attempt),
+                new NpgsqlParameter("request", ToJsonbParameter(entry.RequestJson)),
+                new NpgsqlParameter("response", ToJsonbParameter(entry.ResponseJson)),
+                new NpgsqlParameter("error", (object?)entry.ErrorText ?? DBNull.Value),
+                new NpgsqlParameter("duration", entry.DurationMs),
+                new NpgsqlParameter("validation", entry.ValidationResult),
+                new NpgsqlParameter("createdAt", entry.CreatedAt.UtcDateTime),
+            },
             cancellationToken);
+    }
+
+    // Ответ арбитра может быть усечён или вообще не быть JSON: аудит не должен
+    // падать из-за этого. Валидный JSON храним структурой, остальное — строкой.
+    private static object ToJsonbParameter(string? value)
+    {
+        if (value is null)
+        {
+            return DBNull.Value;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(value);
+            return value;
+        }
+        catch (JsonException)
+        {
+            return JsonSerializer.Serialize(value);
+        }
     }
 
     private static string SourceToString(CandidateSource source) => source switch
