@@ -156,6 +156,15 @@ builder.Services.AddHttpClient("pravo-api", client =>
     client.BaseAddress = new Uri("http://publication.pravo.gov.ru");
     client.Timeout = TimeSpan.FromSeconds(180);
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Csms.NpaAgent/1.0");
+    // Портал отдаёт 500.30, если в запросе есть Accept-Encoding: gzip/br.
+    // Curl без этого заголовка получает 200, поэтому явно просим identity.
+    client.DefaultRequestHeaders.AcceptEncoding.Clear();
+    client.DefaultRequestHeaders.AcceptEncoding.Add(
+        new System.Net.Http.Headers.StringWithQualityHeaderValue("identity"));
+})
+.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    AutomaticDecompression = System.Net.DecompressionMethods.None,
 });
 
 builder.Services.AddSingleton(provider => new PravoDocumentClient(

@@ -238,9 +238,9 @@ public static class NpaEndpoints
         .Produces<NpaSyncResult>()
         .WithSummary("Загрузить свою редакцию акта (.pdf/.docx) и разметить её");
 
-        group.MapPost("/documents/{code}/rules/{okpd2Code}/verify", async (
+        group.MapPost("/documents/{code}/rules/{ruleId:guid}/verify", async (
             string code,
-            string okpd2Code,
+            Guid ruleId,
             NpaVerification body,
             INpaRuleStore store,
             CancellationToken cancellationToken) =>
@@ -253,7 +253,7 @@ public static class NpaEndpoints
                 });
             }
 
-            var rule = await store.VerifyAsync(code, okpd2Code, body.Status, body.Note, cancellationToken);
+            var rule = await store.VerifyAsync(code, ruleId, body.Status, body.Note, cancellationToken);
             return rule is null ? Results.NotFound() : Results.Ok(rule);
         })
         .Produces<NpaRuleInfo>()

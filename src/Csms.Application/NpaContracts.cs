@@ -70,8 +70,13 @@ public sealed record NpaDocumentInfo(
     string Hash,
     bool IsActive);
 
-/// <summary>Одно правило по коду ОКПД2. Code — акт, которому принадлежит правило.</summary>
+/// <summary>
+/// Одно правило по коду ОКПД2. Code — акт, которому принадлежит правило;
+/// Id — конкретная запись: по одному коду их может быть несколько (например,
+/// прямое правило первого агента и предложение LLM с другой цитатой).
+/// </summary>
 public sealed record NpaRuleInfo(
+    Guid Id,
     string Code,
     string Okpd2Code,
     string RuleType,
@@ -233,9 +238,14 @@ public interface INpaRuleStore
         DateTimeOffset? checkedAt = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Подтвердить или отклонить конкретную запись правила. Кодованный
+    /// поиск здесь не годится: один код может иметь несколько правил с
+    /// разными цитатами, и человек должен выбирать именно одно из них.
+    /// </summary>
     Task<NpaRuleInfo?> VerifyAsync(
         string code,
-        string okpd2Code,
+        Guid ruleId,
         string status,
         string? note,
         CancellationToken cancellationToken = default);

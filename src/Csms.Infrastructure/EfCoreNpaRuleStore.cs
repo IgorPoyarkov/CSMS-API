@@ -292,7 +292,7 @@ public sealed class EfCoreNpaRuleStore(
 
     public async Task<NpaRuleInfo?> VerifyAsync(
         string code,
-        string okpd2Code,
+        Guid ruleId,
         string status,
         string? note,
         CancellationToken cancellationToken = default)
@@ -309,11 +309,12 @@ public sealed class EfCoreNpaRuleStore(
             return null;
         }
 
-        var normalized = NpaRuleSets.NormalizeCode(okpd2Code);
+        // Ищем по Id в рамках активной версии: одинаковых кодов теперь может
+        // быть несколько, и статус меняется только у выбранной записи.
         var rule = await db.NpaRules
-            .Where(row => row.DocumentId == active.Id && row.Okpd2Code == normalized)
-            .OrderBy(row => row.IsInherited)
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(
+                row => row.DocumentId == active.Id && row.Id == ruleId,
+                cancellationToken);
 
         if (rule is null)
         {
@@ -328,6 +329,7 @@ public sealed class EfCoreNpaRuleStore(
     }
 
     private static NpaRuleInfo ToInfo(string code, NpaRuleRow rule) => new(
+        rule.Id,
         code,
         rule.Okpd2Code,
         rule.RuleType,

@@ -183,6 +183,7 @@ public sealed class InMemoryNpaRuleStore : INpaRuleStore
             versions.Add(info);
             _rules[Key(import.Code, import.Version)] = import.Rules
                 .Select(rule => new NpaRuleInfo(
+                    Guid.NewGuid(),
                     import.Code,
                     rule.Okpd2Code,
                     rule.RuleType,
@@ -242,7 +243,7 @@ public sealed class InMemoryNpaRuleStore : INpaRuleStore
 
     public Task<NpaRuleInfo?> VerifyAsync(
         string code,
-        string okpd2Code,
+        Guid ruleId,
         string status,
         string? note,
         CancellationToken cancellationToken = default)
@@ -255,11 +256,7 @@ public sealed class InMemoryNpaRuleStore : INpaRuleStore
                 return Task.FromResult<NpaRuleInfo?>(null);
             }
 
-            var normalized = NpaRuleSets.NormalizeCode(okpd2Code);
-            var rule = rules
-                .Where(item => item.Okpd2Code == normalized)
-                .OrderBy(item => item.IsInherited)
-                .FirstOrDefault();
+            var rule = rules.FirstOrDefault(item => item.Id == ruleId);
 
             if (rule is null)
             {

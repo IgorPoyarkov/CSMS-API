@@ -228,6 +228,25 @@ public sealed class NpaTests
     }
 
     [Fact]
+    public void Дерево_не_наследует_спорное_правило_если_есть_явное()
+    {
+        var catalog = Catalog(
+            ("26", "ЭВМ"),
+            ("26.20.11.110", "Компьютеры настольные"));
+
+        var rules = NpaRuleHierarchy.Propagate(
+        [
+            Rule("26", NpaRuleTypes.Include, NpaRuleStatuses.NeedsReview),
+            Rule("26", NpaRuleTypes.Include),
+        ], catalog);
+
+        var child = rules.Single(rule => rule.Okpd2Code == "26.20.11.110");
+        Assert.True(child.IsInherited);
+        Assert.Equal("26", child.InheritedFrom);
+        Assert.Equal(NpaRuleStatuses.Auto, child.Status);
+    }
+
+    [Fact]
     public void Действующее_правило_берёт_самое_длинное_совпадение()
     {
         var rules = new List<NpaRuleInfo>
@@ -243,6 +262,33 @@ public sealed class NpaTests
 
         Assert.Equal("26", NpaRuleHierarchy.Resolve(rules, "26.20.11.110")!.Okpd2Code);
         Assert.Null(NpaRuleHierarchy.Resolve(rules, "32.50.13.190"));
+    }
+
+    [Fact]
+    public async Task Хранилище_различает_правила_с_одним_кодом_по_идентификатору()
+    {
+        var store = new InMemoryNpaRuleStore();
+        await store.PublishAsync(Import("v1",
+            Rule("26.20", NpaRuleTypes.Include),
+            Rule("26.20", NpaRuleTypes.Include, NpaRuleStatuses.NeedsReview)));
+
+        var before = await store.GetRulesAsync("rp-471", null, null, 0, 100);
+        Assert.Equal(2, before.Count(rule => rule.Okpd2Code == "26.20"));
+
+        var pending = await store.GetRulesAsync(
+            "rp-471", null, NpaRuleStatuses.NeedsReview, 0, 100);
+        var suggestion = Assert.Single(pending);
+
+        var verified = await store.VerifyAsync(
+            "rp-471", suggestion.Id, NpaRuleStatuses.Approved, "юрист подтвердил");
+        Assert.NotNull(verified);
+        Assert.Equal(suggestion.Id, verified!.Id);
+        Assert.Equal(NpaRuleStatuses.Approved, verified.Status);
+
+        var after = await store.GetRulesAsync("rp-471", null, null, 0, 100);
+        Assert.DoesNotContain(after, rule => rule.Status == NpaRuleStatuses.NeedsReview);
+        Assert.Single(after, rule => rule.Status == NpaRuleStatuses.Approved);
+        Assert.Single(after, rule => rule.Status == NpaRuleStatuses.Auto);
     }
 
     [Fact]
@@ -274,7 +320,7 @@ public sealed class NpaTests
         Assert.NotNull(await store.ResolveAsync("rp-471", "26.60.11.110", includePending: true));
 
         var verified = await store.VerifyAsync(
-            "rp-471", "26.60", NpaRuleStatuses.Approved, "юрист подтвердил");
+            "rp-471", pending[0].Id, NpaRuleStatuses.Approved, "юрист подтвердил");
         Assert.Equal(NpaRuleStatuses.Approved, verified!.Status);
         Assert.NotNull(await store.ResolveAsync("rp-471", "26.60.11.110", includePending: false));
     }
@@ -472,7 +518,7 @@ public sealed class NpaTests
         string type,
         bool isInherited = false,
         string status = NpaRuleStatuses.Auto) =>
-        new("rp-471", code, type, null, null, isInherited, null, 0.95, status, null, 1, 1);
+        new(Guid.NewGuid(), "rp-471", code, type, null, null, isInherited, null, 0.95, status, null, 1, 1);
 
     private static NpaDocumentImport Import(string version, params NpaRuleImportItem[] rules) =>
         new(

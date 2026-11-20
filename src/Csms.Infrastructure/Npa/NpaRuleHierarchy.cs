@@ -26,7 +26,17 @@ public static class NpaRuleHierarchy
         var direct = new Dictionary<string, NpaRuleImportItem>(StringComparer.Ordinal);
         foreach (var rule in rules)
         {
-            if (!rule.IsInherited)
+            if (rule.IsInherited)
+            {
+                continue;
+            }
+
+            // На один код может быть и явное правило, и предложение LLM.
+            // Наследование берём от проверенного правила, иначе унаследованные
+            // строки тоже оказались бы в очереди needs_review.
+            if (!direct.TryGetValue(rule.Okpd2Code, out var existing) ||
+                (existing.Status == NpaRuleStatuses.NeedsReview &&
+                 rule.Status != NpaRuleStatuses.NeedsReview))
             {
                 direct[rule.Okpd2Code] = rule;
             }

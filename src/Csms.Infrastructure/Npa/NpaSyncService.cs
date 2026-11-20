@@ -212,16 +212,14 @@ public sealed class NpaSyncService(
                         analysis.Error);
                 }
 
-                var known = new HashSet<string>(
-                    direct.Select(rule => rule.Okpd2Code), StringComparer.Ordinal);
+                // Предложения LLM не перезаписывают правила первого агента, а
+                // добавляются рядом: статус needs_review и своя цитата должны
+                // дойти до человека отдельной записью. Подтверждают теперь по
+                // Id правила, поэтому одинаковые коды не мешают.
                 foreach (var rule in NpaLlmRuleAdapter.ToRules(analysis, options.Llm.Model))
                 {
-                    // Явное правило первого агента сильнее предложения модели.
-                    if (known.Add(rule.Okpd2Code))
-                    {
-                        direct.Add(rule);
-                        llmSuggestions++;
-                    }
+                    direct.Add(rule);
+                    llmSuggestions++;
                 }
             }
         }
