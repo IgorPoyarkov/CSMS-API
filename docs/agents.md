@@ -15,6 +15,7 @@
 | **Автообновление XSD ЕИС** | фоновый `BackgroundService` | Раз в 720 мин проверяет Альбом ЕИС, скачивает ZIP с XSD/WSDL, атомарно меняет `schemas/<версия>/` | `csms-api`: `EisSchemaUpdateWorker`, `EisSchemaDownloader` | Работает; через API видно `status`, принудительный `/update` |
 | **Опрос ЕИС 44-FЗ `getDocsIP`** | отдельный `.NET 9` worker | Последовательно опрашивает регионы/подсистемы/даты, скачивает архивы, дедуплицирует документы | `csms/eis-parser/src/Eis44Parser.Worker/PollingWorker.cs` | Код и тесты готовы; live заблокирован токеном ЕИС/контуром (старый токен утёк в git) |
 | **Импортёр справочников НСИ** | on-demand импортёр, не демон | Обходит публичное дерево ЕИС и публикует версию набора с SHA-256 | `csms-api`: `EisNsiTreeImporter`, `/api/references/import/eis/{dataset}` | ОКПД2 загружен: 21 066 кодов; КТРУ/адреса ждут выгрузок по токену |
+| **Извлечение функций из документа** | планируемый конвейер Map/Reduce | Сегментирует любой НПА/регламент/ТЗ, выделяет атомарные подзадачи и раскладывает по таксономии контрактной службы | пока `csms-api/docs/tasks/document-functions-agent.md`, кода нет | Бриф готов; первый целевой документ — Приказ № 158н, эталон — `ORDER_158N_TASK_POOL` |
 
 ---
 
@@ -210,6 +211,8 @@ dotnet run --project eis-parser/src/Eis44Parser.Worker -- --check
 - `docs/tasks/reference-data.md` — справочники НСИ (ОКПД2 закрыт, КТРУ/адреса ждут);
 - `docs/tasks/postgres-persistence.md` — сохраняемость пакетов ЕИС в PostgreSQL
   (`EIS_STORE=postgres`, миграции, оптимистичная блокировка);
+- `docs/tasks/document-functions-agent.md` — новый агент: сегментация → Map →
+  Validate → Reduce → проверка человеком; первый целевой документ — Приказ № 158н;
 - `docs/eis-nsi-soap.md` — шаблон запроса `getNsiRequest` и разбор архивов НСИ;
 - `docs/eis-open-questions.md` — открытые вопросы по обмену с ЕИС.
 
