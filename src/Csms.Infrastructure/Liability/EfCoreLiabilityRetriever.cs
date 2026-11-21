@@ -63,10 +63,17 @@ public sealed class EfCoreLiabilityRetriever(
         var umbrellaHits = await RunUmbrellaSearchAsync(duty.LiabilityActCode, cancellationToken);
         Merge(hits, umbrellaHits, CandidateSource.Umbrella);
 
+        // FTS по всей формулировке обязанности превращается в длинный AND и
+        // теряет узкие нормы (например, 7.30.1 про план-график). Доменный
+        // поиск по специальным нормам — детерминированный способ вернуть их в пул.
+        var domainHits = await RunDomainSearchAsync(
+            duty.LiabilityActCode, queryText, cancellationToken);
+        Merge(hits, domainHits, CandidateSource.FullText);
+
         var norms = await LoadNormsAsync(hits.Keys, cancellationToken);
         var candidates = hits
             .Where(pair => norms.ContainsKey(pair.Key))
-            .Select(pair => ToCandidate(norms[pair.Key], pair.Value))
+            .Select(pair => ToCandidate(norms[pair.Key], pair.Value, queryText))
             .OrderByDescending(candidate => candidate.SearchScore)
             .ThenBy(candidate => candidate.LiabilityNodeId, StringComparer.Ordinal)
             .Take(LiabilityMappingRules.MaxCandidates)
@@ -101,11 +108,15 @@ public sealed class EfCoreLiabilityRetriever(
                 FROM legal.liability_norm_chunks c
                 JOIN legal.liability_norms n ON n.id = c.norm_id
                 WHERE n.act_code = @actCode AND n.status = 'in_force'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM unnest(@markers) AS marker
+                      WHERE n.text ILIKE '%' || marker || '%')
                 ORDER BY c.embedding <=> CAST(@vector AS vector(768))
                 LIMIT @limit
                 """,
                 new NpgsqlParameter("vector", vector),
                 new NpgsqlParameter("actCode", actCode),
+                new NpgsqlParameter("markers", LiabilityMappingRules.NonLiabilityMarkers),
                 new NpgsqlParameter("limit", LiabilityMappingRules.VectorCandidateLimit))
             .ToListAsync(cancellationToken);
         return rows.Select(row => new RankHit(row.Id, row.ChunkId, VectorScore: row.Score)).ToArray();
@@ -122,12 +133,16 @@ public sealed class EfCoreLiabilityRetriever(
                 FROM legal.liability_norm_chunks c
                 JOIN legal.liability_norms n ON n.id = c.norm_id
                 WHERE n.act_code = @actCode AND n.status = 'in_force'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM unnest(@markers) AS marker
+                      WHERE n.text ILIKE '%' || marker || '%')
                   AND c.search_tsv @@ websearch_to_tsquery('russian', @query)
                 ORDER BY ts_rank_cd(c.search_tsv, websearch_to_tsquery('russian', @query)) DESC
                 LIMIT @limit
                 """,
                 new NpgsqlParameter("actCode", actCode),
                 new NpgsqlParameter("query", query),
+                new NpgsqlParameter("markers", LiabilityMappingRules.NonLiabilityMarkers),
                 new NpgsqlParameter("limit", LiabilityMappingRules.FullTextCandidateLimit))
             .ToListAsync(cancellationToken);
         return rows.Select(row => new RankHit(row.Id, row.ChunkId, TextScore: row.Score)).ToArray();
@@ -143,13 +158,68 @@ public sealed class EfCoreLiabilityRetriever(
                 FROM legal.liability_norms
                 WHERE act_code = @actCode AND status = 'in_force'
                   AND norm_type IN ('general', 'blanket')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM unnest(@markers) AS marker
+                      WHERE text ILIKE '%' || marker || '%')
                 ORDER BY updated_at DESC
                 LIMIT @limit
                 """,
                 new NpgsqlParameter("actCode", actCode),
+                new NpgsqlParameter("markers", LiabilityMappingRules.NonLiabilityMarkers),
                 new NpgsqlParameter("limit", LiabilityMappingRules.UmbrellaCandidateLimit))
             .ToListAsync(cancellationToken);
         return rows.Select(row => new RankHit(row.Id, row.ChunkId, UmbrellaScore: row.Score)).ToArray();
+    }
+
+    /// <summary>
+    /// Ищет специальные нормы по лексике обязанности. Если речь о план-графике,
+    /// дополнительно требуется упоминание план-графика в тексте нормы.
+    /// </summary>
+    private async Task<IReadOnlyList<RankHit>> RunDomainSearchAsync(
+        string actCode, string query, CancellationToken cancellationToken)
+    {
+        var markers = LiabilityMappingRules.ProcurementDomainMarkers
+            .Where(marker => query.Contains(marker, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (markers.Length == 0)
+        {
+            return [];
+        }
+
+        var required = LiabilityMappingRules.PlanSchedulePhrases
+            .Where(phrase => query.Contains(phrase, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var rows = await context.Database.SqlQueryRaw<RankRow>(
+                """
+                SELECT n.id AS "Id", NULL::uuid AS "ChunkId",
+                       0.5
+                       + 0.03 * (SELECT count(*) FROM unnest(@markers) AS m
+                                 WHERE n.text ILIKE '%' || m || '%')
+                       + 0.1 * (SELECT count(*) FROM unnest(@required) AS r
+                                WHERE n.text ILIKE '%' || r || '%') AS "Score"
+                FROM legal.liability_norms n
+                WHERE n.act_code = @actCode AND n.status = 'in_force'
+                  AND n.norm_type = 'special'
+                  AND EXISTS (SELECT 1 FROM unnest(@markers) AS m
+                              WHERE n.text ILIKE '%' || m || '%')
+                  AND (cardinality(@required) = 0 OR EXISTS (
+                      SELECT 1 FROM unnest(@required) AS r
+                      WHERE n.text ILIKE '%' || r || '%'))
+                  AND NOT EXISTS (
+                      SELECT 1 FROM unnest(@excluded) AS marker
+                      WHERE n.text ILIKE '%' || marker || '%')
+                ORDER BY "Score" DESC, n.liability_node_id
+                LIMIT @limit
+                """,
+                new NpgsqlParameter("actCode", actCode),
+                new NpgsqlParameter("markers", markers),
+                new NpgsqlParameter("required", required),
+                new NpgsqlParameter("excluded", LiabilityMappingRules.NonLiabilityMarkers),
+                new NpgsqlParameter("limit", LiabilityMappingRules.DomainCandidateLimit))
+            .ToListAsync(cancellationToken);
+        return rows.Select(row => new RankHit(row.Id, row.ChunkId, TextScore: row.Score)).ToArray();
     }
 
     private async Task<Dictionary<Guid, NormRow>> LoadNormsAsync(
@@ -209,7 +279,7 @@ public sealed class EfCoreLiabilityRetriever(
         }
     }
 
-    private static LiabilityCandidate ToCandidate(NormRow norm, RankHit hit)
+    private static LiabilityCandidate ToCandidate(NormRow norm, RankHit hit, string dutyQuery)
     {
         // Взвешенная сумма вместо max: норма, найденная и вектором, и FTS,
         // получает законно более высокий ранг, а umbrella не вытесняет специфичные.
@@ -219,6 +289,17 @@ public sealed class EfCoreLiabilityRetriever(
             (hit.UmbrellaScore ?? 0) * LiabilityMappingRules.UmbrellaSearchWeight,
             0,
             1);
+
+        // Доменная лексика обязанности поднимает специальную норму выше общих.
+        // Это детерминированный реранкинг, а не «ещё один LLM-судья».
+        var dutyMatches = LiabilityMappingRules.ProcurementDomainMarkers
+            .Any(marker => dutyQuery.Contains(marker, StringComparison.OrdinalIgnoreCase));
+        var normMatches = LiabilityMappingRules.ProcurementDomainMarkers
+            .Any(marker => norm.Text.Contains(marker, StringComparison.OrdinalIgnoreCase));
+        if (dutyMatches && normMatches && norm.NormType.Equals("special", StringComparison.OrdinalIgnoreCase))
+        {
+            score = Math.Clamp(score * LiabilityMappingRules.DomainSpecialBoost, 0, 1);
+        }
 
         return new LiabilityCandidate(
             norm.LiabilityNodeId,

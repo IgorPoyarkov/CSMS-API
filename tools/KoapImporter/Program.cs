@@ -319,9 +319,14 @@ internal static class Program
             return "procedural";
         }
 
-        if (articleNumber is "2.4" or "2.9" or "2.9.1" or "4.1" or "4.1.1" or "4.1.2")
+        // Статьи 2.* и 4.* — не состав правонарушения, а общие положения,
+        // освобождение от ответственности и процессуальные основания.
+        // Помечать их blanket-нормами ответственности ошибочно: арбитр
+        // начинает сопоставлять обязанность с «освобождением» (например, 2.9.1).
+        if (articleNumber.StartsWith("2.", StringComparison.Ordinal) ||
+            articleNumber.StartsWith("4.", StringComparison.Ordinal))
         {
-            return "blanket";
+            return "procedural";
         }
 
         var firstPart = articleNumber.Split('.')[0];

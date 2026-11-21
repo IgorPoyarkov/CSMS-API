@@ -9,14 +9,14 @@ namespace Csms.Application;
 public static class LiabilityMappingRules
 {
     /// <summary>Версия системного промпта арбитра — входит в ключ запуска и в БД.</summary>
-    public const string PromptVersion = "liability-arbiter-v2";
+    public const string PromptVersion = "liability-arbiter-v3";
 
     /// <summary>
     /// Версия правил retriever/валидатора. Отдельная от промпта: смена порогов
     /// или весов тоже должна создавать новый run_id, иначе старый результат
     /// будет считаться актуальным.
     /// </summary>
-    public const string RulesVersion = "liability-rules-v2";
+    public const string RulesVersion = "liability-rules-v3";
 
     /// <summary>
     /// Версия набора гипотез. Увеличивать при добавлении/правке ViolationKind
@@ -43,11 +43,51 @@ public static class LiabilityMappingRules
     public const int VectorCandidateLimit = 24;
     public const int FullTextCandidateLimit = 18;
     public const int UmbrellaCandidateLimit = 6;
+    /// <summary>Специальные нормы, найденные по доменной лексике обязанности.</summary>
+    public const int DomainCandidateLimit = 20;
 
     /// <summary>Веса при слиянии оценок retriever'а.</summary>
     public const double VectorSearchWeight = 0.65;
     public const double FullTextSearchWeight = 0.35;
     public const double UmbrellaSearchWeight = 0.5;
+
+    /// <summary>
+    /// Повышение ранга специальной нормы, если в тексте встречается domain-лексика
+    /// обязанности. Защищает от «общих» 1.1/2.9.1, которые не являются составом.
+    /// </summary>
+    public const double DomainSpecialBoost = 1.35;
+
+    /// <summary>
+    /// Тексты-маркеры норм, которые не являются ответственностью: освобождение,
+    /// прекращение дела, отказ в возбуждении. Такие нормы не должны попадать в пул.
+    /// </summary>
+    public static readonly string[] NonLiabilityMarkers =
+    [
+        "освобождение от административной ответственности",
+        "освобождению от административной ответственности",
+        "прекращение дела об административном правонарушении",
+        "прекращению дела об административном правонарушении",
+        "отказ в возбуждении дела об административном правонарушении",
+    ];
+
+    /// <summary>Слова, характерные для обязанностей 158н в сфере 44-ФЗ.</summary>
+    public static readonly string[] ProcurementDomainMarkers =
+    [
+        "план-график", "планов-графиков", "плана-графика", "планом-графиком",
+        "планы-графиков", "план графика", "контрактная система",
+        "контрактной системе", "заказчик", "закупк", "контракт", "извещение",
+        "процедура закупки",
+    ];
+
+    /// <summary>
+    /// Если обязанность говорит о план-графике, special-норма должна описывать
+    /// именно план-график, а не любую закупку. Снимает проблему широкого FTS.
+    /// </summary>
+    public static readonly string[] PlanSchedulePhrases =
+    [
+        "план-график", "плана-графика", "планом-графиком",
+        "планы-графиков", "план графика",
+    ];
 
     /// <summary>
     /// Отпечаток всех правил, влияющих на вывод. Входит в run_id: правка любого
@@ -66,9 +106,14 @@ public static class LiabilityMappingRules
             VectorCandidateLimit,
             FullTextCandidateLimit,
             UmbrellaCandidateLimit,
+            DomainCandidateLimit,
             Number(VectorSearchWeight),
             Number(FullTextSearchWeight),
-            Number(UmbrellaSearchWeight));
+            Number(UmbrellaSearchWeight),
+            Number(DomainSpecialBoost),
+            string.Join(',', NonLiabilityMarkers),
+            string.Join(',', ProcurementDomainMarkers),
+            string.Join(',', PlanSchedulePhrases));
 
     private static string Number(double value) =>
         value.ToString("0.00", CultureInfo.InvariantCulture);

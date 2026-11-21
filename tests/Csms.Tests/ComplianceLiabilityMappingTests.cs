@@ -67,7 +67,8 @@ public sealed class ComplianceLiabilityMappingTests
         [
             new LlmArbiterItem(
                 "n1", MatchDegree.Full, 0.95,
-                ["Наступление ущерба"], "Штраф", "Состав прямо совпадает с гипотезой h1", false),
+                ["Наступление ущерба"], "Штраф",
+                "«За нарушение требований надлежащему исполнению обязанности применяется штраф» — состав прямо совпадает с гипотезой h1", false),
         ]);
 
         var outcome = new MappingValidator().Validate(response, candidates);
@@ -78,6 +79,22 @@ public sealed class ComplianceLiabilityMappingTests
         Assert.Equal(new[] { "Наступление ущерба" }, match.QualifyingConditions);
         Assert.False(match.RequiresHumanReview);
         Assert.Empty(outcome.Violations);
+    }
+
+    [Fact]
+    public void Валидатор_помечает_на_проверку_непроверяемую_цитату()
+    {
+        var response = new LlmArbiterResponse(
+        [
+            new LlmArbiterItem(
+                "n1", MatchDegree.Full, 0.95, [], "Штраф",
+                "«такой фразы в норме нет»", false),
+        ]);
+
+        var outcome = new MappingValidator().Validate(response, [Candidate("n1")]);
+
+        Assert.True(Assert.Single(outcome.Accepted).RequiresHumanReview);
+        Assert.Contains(outcome.Violations, text => text.Contains("проверяемой цитаты"));
     }
 
     [Fact]

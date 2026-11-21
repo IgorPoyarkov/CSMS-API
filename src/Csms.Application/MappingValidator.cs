@@ -60,6 +60,16 @@ public sealed class MappingValidator : IMappingValidator
         foreach (var (nodeId, item) in unique)
         {
             var candidate = byId[nodeId];
+
+            // Нормы-освобождения и прекращения дела не являются ответственностью.
+            // Даже если арбитр ошибочно оценил такую норму, в результат она не идёт.
+            if (ContainsNonLiabilityMarker(candidate.Text))
+            {
+                violations.Add(
+                    $"Норма {nodeId} исключена: текст содержит основание освобождения/прекращения дела.");
+                continue;
+            }
+
             if (item.MatchDegree == MatchDegree.Irrelevant)
             {
                 // Irrelevant исключается из вывода, но остаётся в аудите.
@@ -111,6 +121,15 @@ public sealed class MappingValidator : IMappingValidator
                 review = true;
             }
 
+            // Промпт требует цитату из текста кандидата. Раньше это была только
+            // просьба: теперь несуществующая цитата делает результат спорным.
+            if (!HasVerifiableCitation(item.LegalReasoning, candidate.Text))
+            {
+                violations.Add(
+                    $"У нормы {nodeId} обоснование не содержит проверяемой цитаты из текста нормы.");
+                review = true;
+            }
+
             if (IsMetadataIncomplete(candidate))
             {
                 violations.Add($"У нормы {nodeId} неполные метаданные: статус, дата редакции или реквизиты.");
@@ -136,7 +155,8 @@ public sealed class MappingValidator : IMappingValidator
         // общих/бланкетных норм, которые модель охотнее всего игнорирует.
         foreach (var candidate in candidates)
         {
-            if (unique.ContainsKey(candidate.LiabilityNodeId))
+            if (unique.ContainsKey(candidate.LiabilityNodeId) ||
+                ContainsNonLiabilityMarker(candidate.Text))
             {
                 continue;
             }
@@ -168,6 +188,46 @@ public sealed class MappingValidator : IMappingValidator
             needsManualReviewFallback,
             hasHardViolations);
     }
+
+    private static bool ContainsNonLiabilityMarker(string text) =>
+        LiabilityMappingRules.NonLiabilityMarkers.Any(marker =>
+            text.Contains(marker, StringComparison.OrdinalIgnoreCase));
+
+    private static bool HasVerifiableCitation(string? reasoning, string normText)
+    {
+        if (string.IsNullOrWhiteSpace(reasoning) || string.IsNullOrWhiteSpace(normText))
+        {
+            return false;
+        }
+
+        var quote = ExtractQuote(reasoning);
+        if (quote is null || quote.Length < 8)
+        {
+            return false;
+        }
+
+        return Normalize(normText).Contains(Normalize(quote), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? ExtractQuote(string reasoning)
+    {
+        foreach (var pair in new[] { ('«', '»'), ('“', '”'), ('"', '"') })
+        {
+            var start = reasoning.IndexOf(pair.Item1);
+            if (start < 0) continue;
+            var end = reasoning.IndexOf(pair.Item2, start + 1);
+            if (end > start + 1)
+            {
+                return reasoning[(start + 1)..end];
+            }
+        }
+
+        return null;
+    }
+
+    private static string Normalize(string value) =>
+        string.Join(' ', value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+            .Replace("ё", "е", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsMetadataIncomplete(LiabilityCandidate candidate) =>
         string.IsNullOrWhiteSpace(candidate.Status) ||
