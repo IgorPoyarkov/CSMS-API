@@ -136,6 +136,34 @@ builder.Services.AddSingleton<EisSchemaDownloader>(provider => new EisSchemaDown
     }));
 builder.Services.AddHostedService<EisSchemaUpdateWorker>();
 
+// Проверка контрагентов по публичной выгрузке ст. 19.28 КоАП (sectionId=2369):
+// страница → XLSX → локальный снимок с атомарной подменой → in-memory индекс.
+// Ошибки ЕИС не должны ронять API: состояние видно через /api/eis/counterparties.
+var counterpartyOptions = new EisCounterpartySourceOptions();
+builder.Configuration.GetSection(EisCounterpartySourceOptions.SectionName)
+    .Bind(counterpartyOptions);
+counterpartyOptions.Validate();
+builder.Services.AddSingleton(counterpartyOptions);
+builder.Services.AddSingleton<EisCounterpartyUpdateStatus>();
+var counterpartyRoot = builder.Configuration["EIS_COUNTERPARTIES_ROOT"];
+builder.Services.AddSingleton<ICounterpartyScreeningCatalog>(
+    new EisCounterpartyCatalog(counterpartyRoot));
+
+builder.Services.AddHttpClient("eis-counterparties", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(counterpartyOptions.HttpTimeoutSeconds);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Csms.CounterpartyScreening/1.0");
+});
+
+builder.Services.AddSingleton<EisCounterpartyDownloader>(provider => new EisCounterpartyDownloader(
+    provider.GetRequiredService<IHttpClientFactory>().CreateClient("eis-counterparties"),
+    counterpartyOptions,
+    provider.GetRequiredService<EisCounterpartyUpdateStatus>(),
+    provider.GetRequiredService<ICounterpartyScreeningCatalog>(),
+    provider.GetRequiredService<ILogger<EisCounterpartyDownloader>>(),
+    counterpartyRoot));
+builder.Services.AddHostedService<EisCounterpartyUpdateWorker>();
+
 // Импорт справочников НСИ ходит на официальный сайт ЕИС только по запросу.
 // Таймаут увеличен: дерево ОКПД2 обходится сотнями мелких вызовов children.html.
 builder.Services.AddHttpClient("eis-nsi", client =>
@@ -249,6 +277,7 @@ app.MapOpenApi();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapEisPackageEndpoints();
 app.MapEisSchemaEndpoints();
+app.MapEisCounterpartyEndpoints();
 app.MapReferenceDataEndpoints();
 app.MapNpaEndpoints();
 app.MapDocumentFunctionEndpoints();
