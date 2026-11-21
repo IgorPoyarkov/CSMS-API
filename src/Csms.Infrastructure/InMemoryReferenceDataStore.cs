@@ -45,6 +45,7 @@ public sealed class InMemoryReferenceDataStore : IReferenceDataStore
         string? search,
         string? parentCode,
         int take,
+        int skip = 0,
         CancellationToken cancellationToken = default)
     {
         lock (_gate)
@@ -71,6 +72,7 @@ public sealed class InMemoryReferenceDataStore : IReferenceDataStore
 
             return Task.FromResult<IReadOnlyList<ReferenceItemInfo>>(
                 query.OrderBy(item => item.Code, StringComparer.Ordinal)
+                    .Skip(Math.Max(0, skip))
                     .Take(Math.Clamp(take, 1, 500))
                     .ToArray());
         }

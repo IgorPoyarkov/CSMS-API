@@ -69,6 +69,7 @@ public interface IReferenceDataStore
         string? search,
         string? parentCode,
         int take,
+        int skip = 0,
         CancellationToken cancellationToken = default);
 
     /// <summary>

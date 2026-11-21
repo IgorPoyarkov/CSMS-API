@@ -51,6 +51,7 @@ public static class ReferenceDataEndpoints
             string? search,
             string? parentCode,
             int? take,
+            int? skip,
             IReferenceDataStore store,
             CancellationToken cancellationToken) =>
         {
@@ -59,6 +60,7 @@ public static class ReferenceDataEndpoints
                 search,
                 parentCode,
                 take ?? 50,
+                skip ?? 0,
                 cancellationToken);
 
             return Results.Ok(items);

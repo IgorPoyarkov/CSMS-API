@@ -42,6 +42,7 @@ public sealed class EfCoreReferenceDataStore(
         string? search,
         string? parentCode,
         int take,
+        int skip = 0,
         CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
@@ -76,6 +77,7 @@ public sealed class EfCoreReferenceDataStore(
 
         var rows = await query
             .OrderBy(row => row.Code)
+            .Skip(Math.Max(0, skip))
             .Take(Math.Clamp(take, 1, 500))
             .ToListAsync(cancellationToken);
 
